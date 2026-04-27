@@ -6,8 +6,15 @@ It is designed for tools that need source code plus ground truth: call edges, ca
 
 The first implementation slice supports deterministic generation of:
 
+- single calls
 - linear call chains
+- branching call graphs
+- module dependency chains
+- module cycles
 - straight-line data-flow programs
+- assignment-chain data-flow programs
+- helper-call data-flow programs
+- pipeline data-flow programs
 - temporary Mix projects
 
 ## Installation
@@ -49,7 +56,17 @@ Write a generated Mix project to a temporary directory:
 
 ```elixir
 ProgramFacts.policies()
-#=> [:linear_call_chain, :straight_line_data_flow]
+#=> [
+#=>   :single_call,
+#=>   :linear_call_chain,
+#=>   :branching_call_graph,
+#=>   :module_dependency_chain,
+#=>   :module_cycle,
+#=>   :straight_line_data_flow,
+#=>   :assignment_chain,
+#=>   :helper_call_data_flow,
+#=>   :pipeline_data_flow
+#=> ]
 ```
 
 ## Why not random Elixir strings?

@@ -1,21 +1,38 @@
 defmodule ProgramFacts.Generate do
   alias ProgramFacts.{Facts, File, Program}
 
-  @policies [:linear_call_chain, :straight_line_data_flow]
+  @policies [
+    :single_call,
+    :linear_call_chain,
+    :branching_call_graph,
+    :module_dependency_chain,
+    :module_cycle,
+    :straight_line_data_flow,
+    :assignment_chain,
+    :helper_call_data_flow,
+    :pipeline_data_flow
+  ]
 
   def policies, do: @policies
 
   def generate!(opts \\ []) do
-    opts = Keyword.validate!(opts, policy: :linear_call_chain, seed: 1, depth: 3)
+    opts = Keyword.validate!(opts, policy: :linear_call_chain, seed: 1, depth: 3, width: 2)
 
     case opts[:policy] do
-      :linear_call_chain -> linear_call_chain(opts)
-      :straight_line_data_flow -> straight_line_data_flow(opts)
+      :single_call -> linear_call_chain(Keyword.put(opts, :depth, 2), :single_call)
+      :linear_call_chain -> linear_call_chain(opts, :linear_call_chain)
+      :module_dependency_chain -> linear_call_chain(opts, :module_dependency_chain)
+      :branching_call_graph -> branching_call_graph(opts)
+      :module_cycle -> module_cycle(opts)
+      :straight_line_data_flow -> straight_line_data_flow(opts, :straight_line_data_flow)
+      :assignment_chain -> assignment_chain(opts)
+      :helper_call_data_flow -> straight_line_data_flow(opts, :helper_call_data_flow)
+      :pipeline_data_flow -> pipeline_data_flow(opts)
       policy -> raise ArgumentError, "unknown generation policy: #{inspect(policy)}"
     end
   end
 
-  defp linear_call_chain(opts) do
+  defp linear_call_chain(opts, policy) do
     seed = opts[:seed]
     depth = max(opts[:depth], 2)
     modules = modules(seed, depth)
@@ -29,13 +46,10 @@ defmodule ProgramFacts.Generate do
         render_chain_module(module, next_module)
       end)
 
-    call_edges =
-      functions
-      |> Enum.chunk_every(2, 1, :discard)
-      |> Enum.map(fn [source, target] -> {source, target} end)
+    call_edges = pairwise_edges(functions)
 
     %Program{
-      id: id(seed, :linear_call_chain),
+      id: id(seed, policy),
       seed: seed,
       files: files,
       facts: %Facts{
@@ -43,13 +57,72 @@ defmodule ProgramFacts.Generate do
         functions: functions,
         call_edges: call_edges,
         call_paths: [functions],
-        features: MapSet.new([:remote_call, :linear_call_chain])
+        features: MapSet.new([:remote_call, policy])
       },
-      metadata: %{policy: :linear_call_chain, depth: depth}
+      metadata: %{policy: policy, depth: depth}
     }
   end
 
-  defp straight_line_data_flow(opts) do
+  defp branching_call_graph(opts) do
+    seed = opts[:seed]
+    width = max(opts[:width], 2)
+    [entry_module | branch_modules] = modules(seed, width + 1)
+    entry = {entry_module, :entry, 1}
+    branches = Enum.map(branch_modules, &{&1, function_name(&1), 1})
+
+    files =
+      [
+        render_branch_entry_module(entry_module, branch_modules)
+        | Enum.map(branch_modules, &render_chain_module(&1, nil))
+      ]
+
+    %Program{
+      id: id(seed, :branching_call_graph),
+      seed: seed,
+      files: files,
+      facts: %Facts{
+        modules: [entry_module | branch_modules],
+        functions: [entry | branches],
+        call_edges: Enum.map(branches, &{entry, &1}),
+        call_paths: Enum.map(branches, &[entry, &1]),
+        features: MapSet.new([:remote_call, :branching_call_graph, :fan_out])
+      },
+      metadata: %{policy: :branching_call_graph, width: width}
+    }
+  end
+
+  defp module_cycle(opts) do
+    seed = opts[:seed]
+    depth = max(opts[:depth], 2)
+    modules = modules(seed, depth)
+    functions = Enum.map(modules, &{&1, function_name(&1), 1})
+    cycle_modules = modules ++ [hd(modules)]
+    cycle_functions = functions ++ [hd(functions)]
+
+    files =
+      modules
+      |> Enum.with_index()
+      |> Enum.map(fn {module, index} ->
+        render_chain_module(module, Enum.at(cycle_modules, index + 1))
+      end)
+
+    %Program{
+      id: id(seed, :module_cycle),
+      seed: seed,
+      files: files,
+      facts: %Facts{
+        modules: modules,
+        functions: functions,
+        call_edges: pairwise_edges(cycle_functions),
+        call_paths: [cycle_functions],
+        architecture: %{cycles: [functions]},
+        features: MapSet.new([:remote_call, :module_cycle])
+      },
+      metadata: %{policy: :module_cycle, depth: depth}
+    }
+  end
+
+  defp straight_line_data_flow(opts, policy) do
     seed = opts[:seed]
     [entry_module, helper_module, sink_module] = modules(seed, 3)
 
@@ -64,7 +137,7 @@ defmodule ProgramFacts.Generate do
     ]
 
     %Program{
-      id: id(seed, :straight_line_data_flow),
+      id: id(seed, policy),
       seed: seed,
       files: files,
       facts: %Facts{
@@ -72,22 +145,90 @@ defmodule ProgramFacts.Generate do
         functions: [entry, helper, sink],
         call_edges: [{entry, helper}, {entry, sink}],
         call_paths: [[entry, helper], [entry, sink]],
+        data_flows: [helper_data_flow(entry, helper, sink)],
+        features: MapSet.new([:remote_call, :assignment_chain, :helper_return, :data_flow])
+      },
+      metadata: %{policy: policy, depth: 3}
+    }
+  end
+
+  defp assignment_chain(opts) do
+    seed = opts[:seed]
+    [module] = modules(seed, 1)
+    entry = {module, :entry, 1}
+
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        a = input
+        b = a
+        c = b
+        c
+      end
+    end
+    """
+
+    %Program{
+      id: id(seed, :assignment_chain),
+      seed: seed,
+      files: [file(module, source)],
+      facts: %Facts{
+        modules: [module],
+        functions: [entry],
         data_flows: [
           %{
             from: {:param, entry, :input},
-            through: [
-              {:var, entry, :x},
-              {:arg, helper, 0},
-              {:return, helper},
-              {:var, entry, :y}
-            ],
-            to: {:arg, sink, 0},
-            variable_names: [:input, :x, :value, :y]
+            through: [{:var, entry, :a}, {:var, entry, :b}],
+            to: {:return, entry},
+            variable_names: [:input, :a, :b, :c]
           }
         ],
-        features: MapSet.new([:remote_call, :assignment_chain, :helper_return, :data_flow])
+        features: MapSet.new([:assignment_chain, :data_flow, :return_data_flow])
       },
-      metadata: %{policy: :straight_line_data_flow, depth: 3}
+      metadata: %{policy: :assignment_chain, depth: 1}
+    }
+  end
+
+  defp pipeline_data_flow(opts) do
+    seed = opts[:seed]
+    [entry_module, helper_module, sink_module] = modules(seed, 3)
+    entry = {entry_module, :entry, 1}
+    helper = {helper_module, :normalize, 1}
+    sink = {sink_module, :sink, 1}
+
+    files = [
+      render_pipeline_entry_module(entry_module, helper_module, sink_module),
+      render_helper_module(helper_module),
+      render_sink_module(sink_module)
+    ]
+
+    %Program{
+      id: id(seed, :pipeline_data_flow),
+      seed: seed,
+      files: files,
+      facts: %Facts{
+        modules: [entry_module, helper_module, sink_module],
+        functions: [entry, helper, sink],
+        call_edges: [{entry, helper}, {entry, sink}],
+        call_paths: [[entry, helper], [entry, sink]],
+        data_flows: [helper_data_flow(entry, helper, sink)],
+        features: MapSet.new([:remote_call, :pipeline, :helper_return, :data_flow])
+      },
+      metadata: %{policy: :pipeline_data_flow, depth: 3}
+    }
+  end
+
+  defp helper_data_flow(entry, helper, sink) do
+    %{
+      from: {:param, entry, :input},
+      through: [
+        {:var, entry, :x},
+        {:arg, helper, 0},
+        {:return, helper},
+        {:var, entry, :y}
+      ],
+      to: {:arg, sink, 0},
+      variable_names: [:input, :x, :value, :y]
     }
   end
 
@@ -120,12 +261,51 @@ defmodule ProgramFacts.Generate do
     file(module, source)
   end
 
+  defp render_branch_entry_module(module, branch_modules) do
+    branch_calls =
+      branch_modules
+      |> Enum.map(fn branch_module ->
+        "#{inspect(branch_module)}.#{function_name(branch_module)}(value)"
+      end)
+      |> Enum.join(",\n      ")
+
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(value) do
+        {
+          #{branch_calls}
+        }
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
   defp render_entry_data_flow_module(module, helper_module, sink_module) do
     source = """
     defmodule #{inspect(module)} do
       def entry(input) do
         x = input
         y = #{inspect(helper_module)}.normalize(x)
+        #{inspect(sink_module)}.sink(y)
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_pipeline_entry_module(module, helper_module, sink_module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        x = input
+
+        y =
+          x
+          |> #{inspect(helper_module)}.normalize()
+
         #{inspect(sink_module)}.sink(y)
       end
     end
@@ -192,6 +372,12 @@ defmodule ProgramFacts.Generate do
       |> Path.join()
 
     Path.join("lib", path <> ".ex")
+  end
+
+  defp pairwise_edges(functions) do
+    functions
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.map(fn [source, target] -> {source, target} end)
   end
 
   defp id(seed, policy), do: "pf_#{seed}_#{policy}"
