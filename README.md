@@ -15,6 +15,9 @@ The first implementation slice supports deterministic generation of:
 - assignment-chain data-flow programs
 - helper-call data-flow programs
 - pipeline data-flow programs
+- if/else branch programs
+- case clause programs
+- multi-clause function programs
 - temporary Mix projects
 
 ## Installation
@@ -68,7 +71,10 @@ ProgramFacts.policies()
 #=>   :straight_line_data_flow,
 #=>   :assignment_chain,
 #=>   :helper_call_data_flow,
-#=>   :pipeline_data_flow
+#=>   :pipeline_data_flow,
+#=>   :if_else,
+#=>   :case_clauses,
+#=>   :multi_clause_function
 #=> ]
 ```
 

@@ -12,7 +12,10 @@ defmodule ProgramFactsTest do
              :straight_line_data_flow,
              :assignment_chain,
              :helper_call_data_flow,
-             :pipeline_data_flow
+             :pipeline_data_flow,
+             :if_else,
+             :case_clauses,
+             :multi_clause_function
            ]
   end
 
@@ -64,6 +67,19 @@ defmodule ProgramFactsTest do
     assert program.facts.call_edges == []
     assert {:return, {_module, :entry, 1}} = flow.to
     assert flow.variable_names == [:input, :a, :b, :c]
+  end
+
+  test "generates branch facts" do
+    for policy <- [:if_else, :case_clauses, :multi_clause_function] do
+      program = ProgramFacts.generate!(policy: policy, seed: 16)
+      [branch] = program.facts.branches
+      [entry, ok, error] = program.facts.functions
+
+      assert branch.function == entry
+      assert branch.clauses == 2
+      assert program.facts.call_edges == [{entry, ok}, {entry, error}]
+      assert MapSet.member?(program.facts.features, :branch)
+    end
   end
 
   test "all policies generate compilable source" do

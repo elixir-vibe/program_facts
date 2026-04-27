@@ -10,7 +10,10 @@ defmodule ProgramFacts.Generate do
     :straight_line_data_flow,
     :assignment_chain,
     :helper_call_data_flow,
-    :pipeline_data_flow
+    :pipeline_data_flow,
+    :if_else,
+    :case_clauses,
+    :multi_clause_function
   ]
 
   def policies, do: @policies
@@ -28,6 +31,9 @@ defmodule ProgramFacts.Generate do
       :assignment_chain -> assignment_chain(opts)
       :helper_call_data_flow -> straight_line_data_flow(opts, :helper_call_data_flow)
       :pipeline_data_flow -> pipeline_data_flow(opts)
+      :if_else -> if_else(opts)
+      :case_clauses -> case_clauses(opts)
+      :multi_clause_function -> multi_clause_function(opts)
       policy -> raise ArgumentError, "unknown generation policy: #{inspect(policy)}"
     end
   end
@@ -218,6 +224,101 @@ defmodule ProgramFacts.Generate do
     }
   end
 
+  defp if_else(opts) do
+    seed = opts[:seed]
+    [entry_module, ok_module, error_module] = modules(seed, 3)
+    entry = {entry_module, :entry, 1}
+    ok = {ok_module, :ok, 1}
+    error = {error_module, :error, 1}
+
+    files = [
+      render_if_else_module(entry_module, ok_module, error_module),
+      render_named_sink_module(ok_module, :ok),
+      render_named_sink_module(error_module, :error)
+    ]
+
+    branch = %{
+      function: entry,
+      kind: :if,
+      clauses: 2,
+      calls_by_clause: [
+        %{label: "true", call: ok},
+        %{label: "false", call: error}
+      ]
+    }
+
+    branch_program(seed, :if_else, files, [entry, ok, error], branch)
+  end
+
+  defp case_clauses(opts) do
+    seed = opts[:seed]
+    [entry_module, ok_module, error_module] = modules(seed, 3)
+    entry = {entry_module, :entry, 1}
+    ok = {ok_module, :ok, 1}
+    error = {error_module, :error, 1}
+
+    files = [
+      render_case_module(entry_module, ok_module, error_module),
+      render_named_sink_module(ok_module, :ok),
+      render_named_sink_module(error_module, :error)
+    ]
+
+    branch = %{
+      function: entry,
+      kind: :case,
+      clauses: 2,
+      calls_by_clause: [
+        %{label: "{:ok, value}", call: ok},
+        %{label: "{:error, reason}", call: error}
+      ]
+    }
+
+    branch_program(seed, :case_clauses, files, [entry, ok, error], branch)
+  end
+
+  defp multi_clause_function(opts) do
+    seed = opts[:seed]
+    [entry_module, ok_module, error_module] = modules(seed, 3)
+    entry = {entry_module, :entry, 1}
+    ok = {ok_module, :ok, 1}
+    error = {error_module, :error, 1}
+
+    files = [
+      render_multi_clause_module(entry_module, ok_module, error_module),
+      render_named_sink_module(ok_module, :ok),
+      render_named_sink_module(error_module, :error)
+    ]
+
+    branch = %{
+      function: entry,
+      kind: :multi_clause_function,
+      clauses: 2,
+      calls_by_clause: [
+        %{label: "{:ok, value}", call: ok},
+        %{label: "{:error, reason}", call: error}
+      ]
+    }
+
+    branch_program(seed, :multi_clause_function, files, [entry, ok, error], branch)
+  end
+
+  defp branch_program(seed, policy, files, [entry, ok, error] = functions, branch) do
+    %Program{
+      id: id(seed, policy),
+      seed: seed,
+      files: files,
+      facts: %Facts{
+        modules: Enum.map(functions, fn {module, _function, _arity} -> module end),
+        functions: functions,
+        call_edges: [{entry, ok}, {entry, error}],
+        call_paths: [[entry, ok], [entry, error]],
+        branches: [branch],
+        features: MapSet.new([:remote_call, :branch, policy])
+      },
+      metadata: %{policy: policy, branch_count: 2}
+    }
+  end
+
   defp helper_data_flow(entry, helper, sink) do
     %{
       from: {:param, entry, :input},
@@ -230,6 +331,68 @@ defmodule ProgramFacts.Generate do
       to: {:arg, sink, 0},
       variable_names: [:input, :x, :value, :y]
     }
+  end
+
+  defp render_if_else_module(module, ok_module, error_module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        if input == :ok do
+          #{inspect(ok_module)}.ok(input)
+        else
+          #{inspect(error_module)}.error(input)
+        end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_case_module(module, ok_module, error_module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        case input do
+          {:ok, value} ->
+            #{inspect(ok_module)}.ok(value)
+
+          {:error, reason} ->
+            #{inspect(error_module)}.error(reason)
+        end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_multi_clause_module(module, ok_module, error_module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry({:ok, value}) do
+        #{inspect(ok_module)}.ok(value)
+      end
+
+      def entry({:error, reason}) do
+        #{inspect(error_module)}.error(reason)
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_named_sink_module(module, function) do
+    source = """
+    defmodule #{inspect(module)} do
+      def #{function}(value) do
+        value
+      end
+    end
+    """
+
+    file(module, source)
   end
 
   defp render_chain_module(module, nil) do
