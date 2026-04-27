@@ -70,6 +70,14 @@ Write a generated Mix project to a temporary directory. The project includes a `
   )
 ```
 
+Save a replayable corpus entry:
+
+```elixir
+program = ProgramFacts.generate!(policy: :case_clauses, seed: 43)
+dir = ProgramFacts.Corpus.save!(program, "corpus/reach")
+manifest = ProgramFacts.Corpus.load_manifest!(dir)
+```
+
 ## Policies
 
 ```elixir

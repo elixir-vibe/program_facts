@@ -200,6 +200,24 @@ defmodule ProgramFactsTest do
     end
   end
 
+  test "saves replayable corpus entries" do
+    root =
+      Path.join(System.tmp_dir!(), "program_facts_corpus_#{System.unique_integer([:positive])}")
+
+    program = ProgramFacts.generate!(policy: :case_clauses, seed: 43)
+
+    try do
+      dir = ProgramFacts.Corpus.save!(program, root)
+      manifest = ProgramFacts.Corpus.load_manifest!(dir)
+
+      assert Path.basename(Path.dirname(dir)) == "case_clauses"
+      assert manifest["id"] == program.id
+      assert File.exists?(Path.join(dir, hd(program.files).path))
+    after
+      File.rm_rf!(root)
+    end
+  end
+
   defp assert_compiles(program) do
     source = Enum.map_join(program.files, "\n", & &1.source)
 
