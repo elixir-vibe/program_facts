@@ -2,7 +2,7 @@
 
 ProgramFacts generates Elixir programs with known structural facts for analyzer testing.
 
-It is designed for tools that need source code plus ground truth: call edges, call paths, data-flow facts, effects, branch structures, architecture violations, and project layouts.
+It is designed for tools that need source code plus ground truth: call edges, call paths, data-flow facts, effects, branch structures, source locations, architecture violations, and project layouts.
 
 The first implementation slice supports deterministic generation of:
 
@@ -45,6 +45,7 @@ program =
 program.files
 program.facts.call_edges
 program.facts.call_paths
+program.facts.locations
 
 ProgramFacts.to_map(program)
 ProgramFacts.to_json!(program)

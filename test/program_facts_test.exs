@@ -87,6 +87,17 @@ defmodule ProgramFactsTest do
     end
   end
 
+  test "attaches generated source locations" do
+    program = ProgramFacts.generate!(policy: :case_clauses, seed: 16)
+
+    assert length(program.facts.locations.modules) == 3
+
+    assert [%{module: _, function: "entry", arity: 1, file: _, line: line}] =
+             Enum.filter(program.facts.locations.functions, &(&1.function == "entry"))
+
+    assert is_integer(line)
+  end
+
   test "generates effect facts" do
     cases = [
       pure: :pure,

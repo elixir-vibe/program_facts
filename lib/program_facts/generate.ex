@@ -1,5 +1,5 @@
 defmodule ProgramFacts.Generate do
-  alias ProgramFacts.{Facts, File, Program}
+  alias ProgramFacts.{Facts, File, Locations, Program}
 
   @policies [
     :single_call,
@@ -26,26 +26,29 @@ defmodule ProgramFacts.Generate do
   def generate!(opts \\ []) do
     opts = Keyword.validate!(opts, policy: :linear_call_chain, seed: 1, depth: 3, width: 2)
 
-    case opts[:policy] do
-      :single_call -> linear_call_chain(Keyword.put(opts, :depth, 2), :single_call)
-      :linear_call_chain -> linear_call_chain(opts, :linear_call_chain)
-      :module_dependency_chain -> linear_call_chain(opts, :module_dependency_chain)
-      :branching_call_graph -> branching_call_graph(opts)
-      :module_cycle -> module_cycle(opts)
-      :straight_line_data_flow -> straight_line_data_flow(opts, :straight_line_data_flow)
-      :assignment_chain -> assignment_chain(opts)
-      :helper_call_data_flow -> straight_line_data_flow(opts, :helper_call_data_flow)
-      :pipeline_data_flow -> pipeline_data_flow(opts)
-      :if_else -> if_else(opts)
-      :case_clauses -> case_clauses(opts)
-      :multi_clause_function -> multi_clause_function(opts)
-      :pure -> single_effect(opts, :pure)
-      :io_effect -> single_effect(opts, :io)
-      :send_effect -> single_effect(opts, :send)
-      :raise_effect -> single_effect(opts, :exception)
-      :mixed_effect_boundary -> mixed_effect_boundary(opts)
-      policy -> raise ArgumentError, "unknown generation policy: #{inspect(policy)}"
-    end
+    program =
+      case opts[:policy] do
+        :single_call -> linear_call_chain(Keyword.put(opts, :depth, 2), :single_call)
+        :linear_call_chain -> linear_call_chain(opts, :linear_call_chain)
+        :module_dependency_chain -> linear_call_chain(opts, :module_dependency_chain)
+        :branching_call_graph -> branching_call_graph(opts)
+        :module_cycle -> module_cycle(opts)
+        :straight_line_data_flow -> straight_line_data_flow(opts, :straight_line_data_flow)
+        :assignment_chain -> assignment_chain(opts)
+        :helper_call_data_flow -> straight_line_data_flow(opts, :helper_call_data_flow)
+        :pipeline_data_flow -> pipeline_data_flow(opts)
+        :if_else -> if_else(opts)
+        :case_clauses -> case_clauses(opts)
+        :multi_clause_function -> multi_clause_function(opts)
+        :pure -> single_effect(opts, :pure)
+        :io_effect -> single_effect(opts, :io)
+        :send_effect -> single_effect(opts, :send)
+        :raise_effect -> single_effect(opts, :exception)
+        :mixed_effect_boundary -> mixed_effect_boundary(opts)
+        policy -> raise ArgumentError, "unknown generation policy: #{inspect(policy)}"
+      end
+
+    Locations.attach(program)
   end
 
   defp linear_call_chain(opts, policy) do
