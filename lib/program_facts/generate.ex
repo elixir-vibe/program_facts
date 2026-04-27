@@ -1,5 +1,5 @@
 defmodule ProgramFacts.Generate do
-  alias ProgramFacts.{Facts, File, Locations, Program}
+  alias ProgramFacts.{Facts, File, Layout, Locations, Program}
 
   @policies [
     :single_call,
@@ -24,7 +24,14 @@ defmodule ProgramFacts.Generate do
   def policies, do: @policies
 
   def generate!(opts \\ []) do
-    opts = Keyword.validate!(opts, policy: :linear_call_chain, seed: 1, depth: 3, width: 2)
+    opts =
+      Keyword.validate!(opts,
+        policy: :linear_call_chain,
+        seed: 1,
+        depth: 3,
+        width: 2,
+        layout: :plain
+      )
 
     program =
       case opts[:policy] do
@@ -48,7 +55,9 @@ defmodule ProgramFacts.Generate do
         policy -> raise ArgumentError, "unknown generation policy: #{inspect(policy)}"
       end
 
-    Locations.attach(program)
+    program
+    |> Layout.apply(opts[:layout])
+    |> Locations.attach()
   end
 
   defp linear_call_chain(opts, policy) do

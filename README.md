@@ -20,6 +20,7 @@ The first implementation slice supports deterministic generation of:
 - multi-clause function programs
 - pure/io/send/raise effect programs
 - mixed-effect boundary programs
+- plain, umbrella, and package-style project layouts
 - temporary Mix projects
 
 ## Installation
@@ -49,6 +50,14 @@ program.facts.locations
 
 ProgramFacts.to_map(program)
 ProgramFacts.to_json!(program)
+
+umbrella_program =
+  ProgramFacts.generate!(
+    policy: :linear_call_chain,
+    seed: 123,
+    depth: 4,
+    layout: :umbrella
+  )
 ```
 
 Write a generated Mix project to a temporary directory. The project includes a `program_facts.json` manifest with the generated facts:

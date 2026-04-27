@@ -24,6 +24,7 @@ defmodule ProgramFacts.Project do
     File.mkdir_p!(dir)
     File.write!(Path.join(dir, "mix.exs"), mix_project_source(program))
     File.write!(Path.join(dir, "program_facts.json"), ProgramFacts.to_json!(program))
+    write_excluded_files!(dir, program)
 
     Enum.each(program.files, fn file ->
       path = Path.join(dir, file.path)
@@ -32,6 +33,22 @@ defmodule ProgramFacts.Project do
     end)
 
     dir
+  end
+
+  defp write_excluded_files!(dir, program) do
+    program.metadata
+    |> get_in([:project_layout, :excluded_files])
+    |> List.wrap()
+    |> Enum.each(fn relative_path ->
+      path = Path.join(dir, relative_path)
+      File.mkdir_p!(Path.dirname(path))
+
+      File.write!(path, """
+      defmodule Generated.ProgramFacts.Excluded do
+        def ignored(value), do: value
+      end
+      """)
+    end)
   end
 
   defp mix_project_source(program) do

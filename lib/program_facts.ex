@@ -7,12 +7,17 @@ defmodule ProgramFacts do
   and data-flow relationships.
   """
 
-  alias ProgramFacts.{Export, Generate}
+  alias ProgramFacts.{Export, Generate, Layout}
 
   @doc """
   Returns the supported generation policies.
   """
   def policies, do: Generate.policies()
+
+  @doc """
+  Returns the supported project layouts.
+  """
+  def layouts, do: Layout.layouts()
 
   @doc """
   Generates a program with source files and expected facts.

@@ -2,6 +2,10 @@ defmodule ProgramFactsTest do
   use ExUnit.Case
   doctest ProgramFacts
 
+  test "lists supported layouts" do
+    assert ProgramFacts.layouts() == [:plain, :umbrella, :package_style]
+  end
+
   test "lists supported policies" do
     assert ProgramFacts.policies() == [
              :single_call,
@@ -123,6 +127,18 @@ defmodule ProgramFactsTest do
     assert MapSet.member?(program.facts.features, :mixed_effect_boundary)
   end
 
+  test "applies project layouts" do
+    plain = ProgramFacts.generate!(policy: :single_call, seed: 19, layout: :plain)
+    umbrella = ProgramFacts.generate!(policy: :single_call, seed: 19, layout: :umbrella)
+    package_style = ProgramFacts.generate!(policy: :single_call, seed: 19, layout: :package_style)
+
+    assert Enum.all?(plain.files, &String.starts_with?(&1.path, "lib/"))
+    assert Enum.all?(umbrella.files, &String.starts_with?(&1.path, "apps/generated_app/lib/"))
+    assert Enum.all?(package_style.files, &String.starts_with?(&1.path, "generated_package/lib/"))
+    assert umbrella.metadata.project_layout.excluded_files != []
+    assert length(umbrella.facts.locations.functions) == 2
+  end
+
   test "all policies generate compilable source" do
     ProgramFacts.policies()
     |> Enum.with_index(20)
@@ -166,6 +182,19 @@ defmodule ProgramFactsTest do
 
     try do
       assert {_, 0} = System.cmd("mix", ["compile"], cd: dir, stderr_to_stdout: true)
+    after
+      File.rm_rf!(dir)
+    end
+  end
+
+  test "written layout project includes excluded fixtures" do
+    {:ok, dir, program} =
+      ProgramFacts.Project.write_tmp!(policy: :single_call, seed: 42, layout: :umbrella)
+
+    try do
+      for path <- program.metadata.project_layout.excluded_files do
+        assert File.exists?(Path.join(dir, path))
+      end
     after
       File.rm_rf!(dir)
     end
