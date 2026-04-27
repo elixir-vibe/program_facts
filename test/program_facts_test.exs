@@ -75,12 +75,26 @@ defmodule ProgramFactsTest do
     end)
   end
 
+  test "exports programs to JSON-friendly maps" do
+    program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 39, depth: 2)
+    map = ProgramFacts.to_map(program)
+
+    assert map["id"] == "pf_39_linear_call_chain"
+    assert [%{"path" => _, "source" => _, "kind" => "elixir"}, _] = map["files"]
+
+    assert [%{"id" => _, "module" => _, "function" => _, "arity" => 1}, _] =
+             map["facts"]["functions"]
+
+    assert is_binary(ProgramFacts.to_json!(program))
+  end
+
   test "writes a temporary Mix project" do
     {:ok, dir, program} =
       ProgramFacts.Project.write_tmp!(policy: :straight_line_data_flow, seed: 40)
 
     try do
       assert File.exists?(Path.join(dir, "mix.exs"))
+      assert File.exists?(Path.join(dir, "program_facts.json"))
 
       for file <- program.files do
         assert File.read!(Path.join(dir, file.path)) == file.source

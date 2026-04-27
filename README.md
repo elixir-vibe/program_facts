@@ -40,9 +40,12 @@ program =
 program.files
 program.facts.call_edges
 program.facts.call_paths
+
+ProgramFacts.to_map(program)
+ProgramFacts.to_json!(program)
 ```
 
-Write a generated Mix project to a temporary directory:
+Write a generated Mix project to a temporary directory. The project includes a `program_facts.json` manifest with the generated facts:
 
 ```elixir
 {:ok, dir, program} =

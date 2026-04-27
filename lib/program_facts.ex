@@ -7,7 +7,7 @@ defmodule ProgramFacts do
   and data-flow relationships.
   """
 
-  alias ProgramFacts.Generate
+  alias ProgramFacts.{Export, Generate}
 
   @doc """
   Returns the supported generation policies.
@@ -32,4 +32,14 @@ defmodule ProgramFacts do
       1
   """
   def generate!(opts \\ []), do: Generate.generate!(opts)
+
+  @doc """
+  Converts a generated program, file, or facts struct into a JSON-friendly map.
+  """
+  def to_map(value), do: Export.to_map(value)
+
+  @doc """
+  Encodes a generated program, file, or facts struct as JSON.
+  """
+  def to_json!(value), do: Export.to_json!(value)
 end

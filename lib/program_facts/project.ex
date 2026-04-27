@@ -23,6 +23,7 @@ defmodule ProgramFacts.Project do
     File.rm_rf!(dir)
     File.mkdir_p!(dir)
     File.write!(Path.join(dir, "mix.exs"), mix_project_source(program))
+    File.write!(Path.join(dir, "program_facts.json"), ProgramFacts.to_json!(program))
 
     Enum.each(program.files, fn file ->
       path = Path.join(dir, file.path)
