@@ -13,7 +13,12 @@ defmodule ProgramFacts.Generate do
     :pipeline_data_flow,
     :if_else,
     :case_clauses,
-    :multi_clause_function
+    :multi_clause_function,
+    :pure,
+    :io_effect,
+    :send_effect,
+    :raise_effect,
+    :mixed_effect_boundary
   ]
 
   def policies, do: @policies
@@ -34,6 +39,11 @@ defmodule ProgramFacts.Generate do
       :if_else -> if_else(opts)
       :case_clauses -> case_clauses(opts)
       :multi_clause_function -> multi_clause_function(opts)
+      :pure -> single_effect(opts, :pure)
+      :io_effect -> single_effect(opts, :io)
+      :send_effect -> single_effect(opts, :send)
+      :raise_effect -> single_effect(opts, :exception)
+      :mixed_effect_boundary -> mixed_effect_boundary(opts)
       policy -> raise ArgumentError, "unknown generation policy: #{inspect(policy)}"
     end
   end
@@ -319,6 +329,58 @@ defmodule ProgramFacts.Generate do
     }
   end
 
+  defp single_effect(opts, effect) do
+    seed = opts[:seed]
+    [module] = modules(seed, 1)
+    function = effect_function(effect)
+    mfa = {module, function, effect_arity(effect)}
+
+    %Program{
+      id: id(seed, effect_policy(effect)),
+      seed: seed,
+      files: [render_effect_module(module, effect)],
+      facts: %Facts{
+        modules: [module],
+        functions: [mfa],
+        effects: [{mfa, effect}],
+        features: MapSet.new([:effect, effect])
+      },
+      metadata: %{policy: effect_policy(effect), effect: effect}
+    }
+  end
+
+  defp mixed_effect_boundary(opts) do
+    seed = opts[:seed]
+    [module] = modules(seed, 1)
+    function = {module, :boundary, 2}
+
+    %Program{
+      id: id(seed, :mixed_effect_boundary),
+      seed: seed,
+      files: [render_mixed_effect_module(module)],
+      facts: %Facts{
+        modules: [module],
+        functions: [function],
+        effects: [{function, :io}, {function, :send}],
+        features: MapSet.new([:effect, :io, :send, :mixed_effect_boundary])
+      },
+      metadata: %{policy: :mixed_effect_boundary, effects: [:io, :send]}
+    }
+  end
+
+  defp effect_policy(:pure), do: :pure
+  defp effect_policy(:io), do: :io_effect
+  defp effect_policy(:send), do: :send_effect
+  defp effect_policy(:exception), do: :raise_effect
+
+  defp effect_function(:pure), do: :pure
+  defp effect_function(:io), do: :io
+  defp effect_function(:send), do: :sends
+  defp effect_function(:exception), do: :raises
+
+  defp effect_arity(:send), do: 2
+  defp effect_arity(_effect), do: 1
+
   defp helper_data_flow(entry, helper, sink) do
     %{
       from: {:param, entry, :input},
@@ -331,6 +393,67 @@ defmodule ProgramFacts.Generate do
       to: {:arg, sink, 0},
       variable_names: [:input, :x, :value, :y]
     }
+  end
+
+  defp render_effect_module(module, :pure) do
+    source = """
+    defmodule #{inspect(module)} do
+      def pure(value) do
+        value
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_effect_module(module, :io) do
+    source = """
+    defmodule #{inspect(module)} do
+      def io(value) do
+        IO.inspect(value)
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_effect_module(module, :send) do
+    source = """
+    defmodule #{inspect(module)} do
+      def sends(pid, message) do
+        send(pid, message)
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_effect_module(module, :exception) do
+    source = """
+    defmodule #{inspect(module)} do
+      def raises(reason) do
+        raise RuntimeError, message: inspect(reason)
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_mixed_effect_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def boundary(pid, message) do
+        IO.inspect(message)
+        send(pid, message)
+      end
+    end
+    """
+
+    file(module, source)
   end
 
   defp render_if_else_module(module, ok_module, error_module) do

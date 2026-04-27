@@ -18,6 +18,8 @@ The first implementation slice supports deterministic generation of:
 - if/else branch programs
 - case clause programs
 - multi-clause function programs
+- pure/io/send/raise effect programs
+- mixed-effect boundary programs
 - temporary Mix projects
 
 ## Installation
@@ -74,7 +76,12 @@ ProgramFacts.policies()
 #=>   :pipeline_data_flow,
 #=>   :if_else,
 #=>   :case_clauses,
-#=>   :multi_clause_function
+#=>   :multi_clause_function,
+#=>   :pure,
+#=>   :io_effect,
+#=>   :send_effect,
+#=>   :raise_effect,
+#=>   :mixed_effect_boundary
 #=> ]
 ```
 

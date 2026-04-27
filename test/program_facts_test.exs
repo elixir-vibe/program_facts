@@ -15,7 +15,12 @@ defmodule ProgramFactsTest do
              :pipeline_data_flow,
              :if_else,
              :case_clauses,
-             :multi_clause_function
+             :multi_clause_function,
+             :pure,
+             :io_effect,
+             :send_effect,
+             :raise_effect,
+             :mixed_effect_boundary
            ]
   end
 
@@ -80,6 +85,31 @@ defmodule ProgramFactsTest do
       assert program.facts.call_edges == [{entry, ok}, {entry, error}]
       assert MapSet.member?(program.facts.features, :branch)
     end
+  end
+
+  test "generates effect facts" do
+    cases = [
+      pure: :pure,
+      io_effect: :io,
+      send_effect: :send,
+      raise_effect: :exception
+    ]
+
+    for {policy, effect} <- cases do
+      program = ProgramFacts.generate!(policy: policy, seed: 17)
+      [function] = program.facts.functions
+
+      assert program.facts.effects == [{function, effect}]
+      assert MapSet.member?(program.facts.features, :effect)
+    end
+  end
+
+  test "generates mixed-effect boundary facts" do
+    program = ProgramFacts.generate!(policy: :mixed_effect_boundary, seed: 18)
+    [function] = program.facts.functions
+
+    assert Enum.sort(program.facts.effects) == Enum.sort([{function, :io}, {function, :send}])
+    assert MapSet.member?(program.facts.features, :mixed_effect_boundary)
   end
 
   test "all policies generate compilable source" do
