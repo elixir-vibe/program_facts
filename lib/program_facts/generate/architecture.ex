@@ -7,7 +7,7 @@ defmodule ProgramFacts.Generate.Architecture do
 
   def generate(opts, policy) do
     seed = opts[:seed]
-    [web_module, domain_module, repo_module] = Naming.modules(seed, 3)
+    [web_module, domain_module, repo_module] = architecture_modules(seed, policy)
     functions = functions(web_module, domain_module, repo_module, policy)
     violation = violation(web_module, domain_module, repo_module, policy)
 
@@ -33,6 +33,16 @@ defmodule ProgramFacts.Generate.Architecture do
       metadata: %{policy: policy, depth: 3}
     }
   end
+
+  defp architecture_modules(seed, :public_api_boundary_violation) do
+    [
+      Module.concat([Generated.ProgramFacts.External, "Seed#{seed}", Web]),
+      Module.concat([Generated.ProgramFacts.PublicApi, "Seed#{seed}", Internal]),
+      Module.concat([Generated.ProgramFacts.PublicApi, "Seed#{seed}", Repo])
+    ]
+  end
+
+  defp architecture_modules(seed, _policy), do: Naming.modules(seed, 3)
 
   defp functions(web_module, domain_module, repo_module, :allowed_effect_violation),
     do: [{web_module, :entry, 1}, {domain_module, :handle, 1}, {repo_module, :write, 1}]

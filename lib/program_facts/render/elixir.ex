@@ -422,23 +422,46 @@ defmodule ProgramFacts.Render.Elixir do
     source = """
     [
       layers: [
-        web: [#{inspect(web_module)}],
-        domain: [#{inspect(domain_module)}],
-        repo: [#{inspect(repo_module)}]
+        web: [#{inspect(module_pattern(web_module))}],
+        domain: [#{inspect(module_pattern(domain_module))}],
+        repo: [#{inspect(module_pattern(repo_module))}]
       ],
       forbidden_deps: [
-        {#{inspect(web_module)}, #{inspect(repo_module)}}
+        {:web, :repo}
       ],
-      public_api: [#{inspect(domain_module)}],
-      internal: [#{inspect(domain_module)}],
+      public_api: #{inspect(public_api_patterns(domain_module, policy))},
+      internal: #{inspect(internal_patterns(domain_module, policy))},
+      internal_callers: #{inspect(internal_callers(domain_module, policy))},
       allowed_effects: [
-        {#{inspect(repo_module)}, [:read]}
-      ],
-      metadata: [policy: #{inspect(policy)}]
+        {#{inspect(module_pattern(repo_module))}, [:pure, :read]}
+      ]
     ]
     """
 
     %File{path: ".reach.exs", source: source, kind: :config}
+  end
+
+  defp public_api_patterns(domain_module, :public_api_boundary_violation) do
+    [domain_module |> module_pattern() |> String.split(".") |> Enum.drop(-1) |> Enum.join(".")]
+  end
+
+  defp public_api_patterns(_domain_module, _policy), do: []
+
+  defp internal_patterns(domain_module, :internal_boundary_violation),
+    do: [module_pattern(domain_module)]
+
+  defp internal_patterns(_domain_module, _policy), do: []
+
+  defp internal_callers(domain_module, :internal_boundary_violation) do
+    [{module_pattern(domain_module), [module_pattern(domain_module)]}]
+  end
+
+  defp internal_callers(_domain_module, _policy), do: []
+
+  defp module_pattern(module) do
+    module
+    |> Atom.to_string()
+    |> String.replace_leading("Elixir.", "")
   end
 
   def file(module, source),
