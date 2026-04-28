@@ -16,69 +16,89 @@ defmodule ProgramFacts.Locations do
 
   defp module_locations(program) do
     program.files
-    |> Enum.flat_map(fn file ->
-      file.source
-      |> lines()
-      |> Enum.flat_map(fn {line, line_number} ->
-        case Regex.run(~r/^defmodule\s+([^\s]+)\s+do$/, String.trim(line)) do
-          [_, module] -> [%{module: module, file: file.path, line: line_number}]
-          _no_match -> []
-        end
-      end)
-    end)
+    |> Enum.flat_map(&ast_modules/1)
+    |> Enum.map(fn {module, line, path} -> %{module: module, file: path, line: line} end)
   end
 
   defp function_locations(program) do
     program.files
-    |> Enum.flat_map(fn file ->
-      module = module_name(file.source)
+    |> Enum.flat_map(&ast_functions/1)
+    |> Enum.map(fn {module, function, arity, line, path} ->
+      %{module: module, function: Atom.to_string(function), arity: arity, file: path, line: line}
+    end)
+  end
 
-      file.source
-      |> lines()
-      |> Enum.flat_map(fn {line, line_number} ->
-        case Regex.run(~r/^def\s+([a-zA-Z_][a-zA-Z0-9_?!]*)\((.*)\)\s+do$/, String.trim(line)) do
-          [_, function, args] ->
-            [
-              %{
-                module: module,
-                function: function,
-                arity: arity(args),
-                file: file.path,
-                line: line_number
-              }
-            ]
+  defp ast_modules(file) do
+    file.source
+    |> quoted!()
+    |> collect_modules(file.path)
+  end
 
-          _no_match ->
-            []
-        end
+  defp ast_functions(file) do
+    file.source
+    |> quoted!()
+    |> collect_functions(file.path)
+  end
+
+  defp quoted!(source) do
+    Code.string_to_quoted!(source, columns: true, token_metadata: true)
+  end
+
+  defp collect_modules(ast, path) do
+    {_ast, modules} =
+      Macro.prewalk(ast, [], fn
+        {:defmodule, meta, [module_ast, _body]} = node, modules ->
+          {node, [{module_name(module_ast), meta[:line], path} | modules]}
+
+        node, modules ->
+          {node, modules}
       end)
+
+    Enum.reverse(modules)
+  end
+
+  defp collect_functions(ast, path) do
+    {_ast, functions} = collect_functions(ast, path, nil, [])
+    Enum.reverse(functions)
+  end
+
+  defp collect_functions(
+         {:defmodule, _meta, [module_ast, [do: body]]} = ast,
+         path,
+         _module,
+         functions
+       ) do
+    module = module_name(module_ast)
+    {_body, functions} = collect_functions(body, path, module, functions)
+    {ast, functions}
+  end
+
+  defp collect_functions(
+         {:def, meta, [{function, _call_meta, args}, _body]} = ast,
+         path,
+         module,
+         functions
+       )
+       when is_atom(function) and is_list(args) do
+    {ast, [{module, function, length(args), meta[:line], path} | functions]}
+  end
+
+  defp collect_functions(ast, path, module, functions) do
+    Macro.prewalk(ast, functions, fn
+      {:defmodule, _meta, [_module_ast, _body]} = node, acc ->
+        {_node, acc} = collect_functions(node, path, module, acc)
+        {node, acc}
+
+      {:def, _meta, [_call, _body]} = node, acc ->
+        {_node, acc} = collect_functions(node, path, module, acc)
+        {node, acc}
+
+      node, acc ->
+        {node, acc}
     end)
   end
 
-  defp module_name(source) do
-    source
-    |> lines()
-    |> Enum.find_value(fn {line, _line_number} ->
-      case Regex.run(~r/^defmodule\s+([^\s]+)\s+do$/, String.trim(line)) do
-        [_, module] -> module
-        _no_match -> nil
-      end
-    end)
-  end
-
-  defp lines(source) do
-    source
-    |> String.split("\n", trim: false)
-    |> Enum.with_index(1)
-  end
-
-  defp arity("") do
-    0
-  end
-
-  defp arity(args) do
-    args
-    |> String.split(",")
-    |> length()
+  defp module_name(module_ast) do
+    Macro.to_string(module_ast)
   end
 end

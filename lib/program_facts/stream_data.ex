@@ -12,23 +12,30 @@ defmodule ProgramFacts.StreamData do
   def program(opts \\ []) do
     stream_data!()
 
-    policies = Keyword.get(opts, :policies, ProgramFacts.policies())
-    min_seed = Keyword.get(opts, :min_seed, 1)
-    max_seed = Keyword.get(opts, :max_seed, 1_000_000)
-    min_depth = Keyword.get(opts, :min_depth, 2)
-    max_depth = Keyword.get(opts, :max_depth, 8)
-    min_width = Keyword.get(opts, :min_width, 2)
-    max_width = Keyword.get(opts, :max_width, 6)
-
-    bind(member_of(policies), fn policy ->
-      bind(integer(min_seed..max_seed), fn seed ->
-        bind(integer(min_depth..max_depth), fn depth ->
-          map(integer(min_width..max_width), fn width ->
-            ProgramFacts.generate!(policy: policy, seed: seed, depth: depth, width: width)
-          end)
-        end)
-      end)
+    opts
+    |> generator_options()
+    |> options_generator()
+    |> StreamData.map(fn %{policy: policy, seed: seed, depth: depth, width: width} ->
+      ProgramFacts.generate!(policy: policy, seed: seed, depth: depth, width: width)
     end)
+  end
+
+  defp generator_options(opts) do
+    %{
+      policies: Keyword.get(opts, :policies, ProgramFacts.policies()),
+      seed_range: Keyword.get(opts, :min_seed, 1)..Keyword.get(opts, :max_seed, 1_000_000),
+      depth_range: Keyword.get(opts, :min_depth, 2)..Keyword.get(opts, :max_depth, 8),
+      width_range: Keyword.get(opts, :min_width, 2)..Keyword.get(opts, :max_width, 6)
+    }
+  end
+
+  defp options_generator(opts) do
+    StreamData.fixed_map(%{
+      policy: StreamData.member_of(opts.policies),
+      seed: StreamData.integer(opts.seed_range),
+      depth: StreamData.integer(opts.depth_range),
+      width: StreamData.integer(opts.width_range)
+    })
   end
 
   defp stream_data! do
@@ -36,9 +43,4 @@ defmodule ProgramFacts.StreamData do
       raise "ProgramFacts.StreamData requires the :stream_data dependency"
     end
   end
-
-  defp bind(generator, function), do: apply(StreamData, :bind, [generator, function])
-  defp integer(range), do: apply(StreamData, :integer, [range])
-  defp map(generator, function), do: apply(StreamData, :map, [generator, function])
-  defp member_of(values), do: apply(StreamData, :member_of, [values])
 end

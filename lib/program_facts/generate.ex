@@ -1,4 +1,6 @@
 defmodule ProgramFacts.Generate do
+  @moduledoc false
+
   alias ProgramFacts.{Facts, File, Layout, Locations, Program}
 
   @policies [
@@ -36,35 +38,46 @@ defmodule ProgramFacts.Generate do
         layout: :plain
       )
 
-    program =
-      case opts[:policy] do
-        :single_call -> linear_call_chain(Keyword.put(opts, :depth, 2), :single_call)
-        :linear_call_chain -> linear_call_chain(opts, :linear_call_chain)
-        :module_dependency_chain -> linear_call_chain(opts, :module_dependency_chain)
-        :branching_call_graph -> branching_call_graph(opts)
-        :module_cycle -> module_cycle(opts)
-        :straight_line_data_flow -> straight_line_data_flow(opts, :straight_line_data_flow)
-        :assignment_chain -> assignment_chain(opts)
-        :helper_call_data_flow -> straight_line_data_flow(opts, :helper_call_data_flow)
-        :pipeline_data_flow -> pipeline_data_flow(opts)
-        :if_else -> if_else(opts)
-        :case_clauses -> case_clauses(opts)
-        :cond_branches -> cond_branches(opts)
-        :with_chain -> with_chain(opts)
-        :anonymous_fn_branch -> anonymous_fn_branch(opts)
-        :multi_clause_function -> multi_clause_function(opts)
-        :pure -> single_effect(opts, :pure)
-        :io_effect -> single_effect(opts, :io)
-        :send_effect -> single_effect(opts, :send)
-        :raise_effect -> single_effect(opts, :exception)
-        :mixed_effect_boundary -> mixed_effect_boundary(opts)
-        policy -> raise ArgumentError, "unknown generation policy: #{inspect(policy)}"
-      end
-
-    program
+    opts[:policy]
+    |> generate_policy!(opts)
     |> Layout.apply(opts[:layout])
     |> Locations.attach()
   end
+
+  defp generate_policy!(:single_call, opts),
+    do: linear_call_chain(Keyword.put(opts, :depth, 2), :single_call)
+
+  defp generate_policy!(:linear_call_chain, opts), do: linear_call_chain(opts, :linear_call_chain)
+
+  defp generate_policy!(:module_dependency_chain, opts),
+    do: linear_call_chain(opts, :module_dependency_chain)
+
+  defp generate_policy!(:branching_call_graph, opts), do: branching_call_graph(opts)
+  defp generate_policy!(:module_cycle, opts), do: module_cycle(opts)
+
+  defp generate_policy!(:straight_line_data_flow, opts),
+    do: straight_line_data_flow(opts, :straight_line_data_flow)
+
+  defp generate_policy!(:assignment_chain, opts), do: assignment_chain(opts)
+
+  defp generate_policy!(:helper_call_data_flow, opts),
+    do: straight_line_data_flow(opts, :helper_call_data_flow)
+
+  defp generate_policy!(:pipeline_data_flow, opts), do: pipeline_data_flow(opts)
+  defp generate_policy!(:if_else, opts), do: if_else(opts)
+  defp generate_policy!(:case_clauses, opts), do: case_clauses(opts)
+  defp generate_policy!(:cond_branches, opts), do: cond_branches(opts)
+  defp generate_policy!(:with_chain, opts), do: with_chain(opts)
+  defp generate_policy!(:anonymous_fn_branch, opts), do: anonymous_fn_branch(opts)
+  defp generate_policy!(:multi_clause_function, opts), do: multi_clause_function(opts)
+  defp generate_policy!(:pure, opts), do: single_effect(opts, :pure)
+  defp generate_policy!(:io_effect, opts), do: single_effect(opts, :io)
+  defp generate_policy!(:send_effect, opts), do: single_effect(opts, :send)
+  defp generate_policy!(:raise_effect, opts), do: single_effect(opts, :exception)
+  defp generate_policy!(:mixed_effect_boundary, opts), do: mixed_effect_boundary(opts)
+
+  defp generate_policy!(policy, _opts),
+    do: raise(ArgumentError, "unknown generation policy: #{inspect(policy)}")
 
   defp linear_call_chain(opts, policy) do
     seed = opts[:seed]
@@ -700,11 +713,9 @@ defmodule ProgramFacts.Generate do
 
   defp render_branch_entry_module(module, branch_modules) do
     branch_calls =
-      branch_modules
-      |> Enum.map(fn branch_module ->
+      Enum.map_join(branch_modules, ",\n      ", fn branch_module ->
         "#{inspect(branch_module)}.#{function_name(branch_module)}(value)"
       end)
-      |> Enum.join(",\n      ")
 
     source = """
     defmodule #{inspect(module)} do

@@ -1,4 +1,8 @@
 defmodule ProgramFacts.Project do
+  @moduledoc """
+  Writes generated programs to Mix project directories.
+  """
+
   alias ProgramFacts.Program
 
   def write_tmp!(%Program{} = program) do

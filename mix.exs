@@ -11,6 +11,11 @@ defmodule ProgramFacts.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      aliases: aliases(),
+      dialyzer: [
+        plt_file: {:no_warn, "_build/dev/dialyxir_plt.plt"},
+        plt_add_apps: [:mix]
+      ],
       description: "Generate Elixir programs with known structural facts for analyzer testing.",
       package: package(),
       docs: docs()
@@ -23,9 +28,29 @@ defmodule ProgramFacts.MixProject do
     ]
   end
 
+  def cli do
+    [preferred_envs: [ci: :test]]
+  end
+
+  defp aliases do
+    [
+      ci: [
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "credo --strict",
+        "ex_dna",
+        "dialyzer",
+        "test"
+      ]
+    ]
+  end
+
   defp deps do
     [
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
+      {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
       {:stream_data, "~> 1.1", only: [:dev, :test]}
     ]
   end

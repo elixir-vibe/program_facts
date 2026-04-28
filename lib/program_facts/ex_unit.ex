@@ -3,13 +3,17 @@ defmodule ProgramFacts.ExUnit do
   Test helpers for generated programs.
   """
 
-  import ExUnit.Assertions
-
   alias ProgramFacts.Program
 
   def assert_compiles(%Program{} = program) do
     modules = compile_modules(program)
-    assert Enum.sort(modules) == Enum.sort(program.facts.modules)
+
+    assert_equal(
+      Enum.sort(modules),
+      Enum.sort(program.facts.modules),
+      "compiled modules differ from expected modules"
+    )
+
     program
   end
 
@@ -17,8 +21,13 @@ defmodule ProgramFacts.ExUnit do
     json = ProgramFacts.to_json!(program)
     manifest = JSON.decode!(json)
 
-    assert manifest["id"] == program.id
-    assert length(manifest["files"]) == length(program.files)
+    assert_equal(manifest["id"], program.id, "manifest id differs from program id")
+
+    assert_equal(
+      length(manifest["files"]),
+      length(program.files),
+      "manifest file count differs from program files"
+    )
 
     manifest
   end
@@ -37,6 +46,12 @@ defmodule ProgramFacts.ExUnit do
     opts
     |> ProgramFacts.generate!()
     |> with_tmp_project(function)
+  end
+
+  defp assert_equal(left, right, message) do
+    unless left == right do
+      raise "#{message}: left=#{inspect(left)} right=#{inspect(right)}"
+    end
   end
 
   defp compile_modules(program) do
