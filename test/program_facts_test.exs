@@ -247,6 +247,18 @@ defmodule ProgramFactsTest do
     assert_compiles(variant)
   end
 
+  test "provides ExUnit helpers" do
+    program = ProgramFacts.generate!(policy: :if_else, seed: 46)
+
+    assert ProgramFacts.ExUnit.assert_compiles(program) == program
+    assert ProgramFacts.ExUnit.assert_manifest_round_trip(program)["id"] == program.id
+
+    ProgramFacts.ExUnit.with_tmp_project(program, fn dir, tmp_program ->
+      assert tmp_program.id == program.id
+      assert File.exists?(Path.join(dir, "mix.exs"))
+    end)
+  end
+
   test "saves replayable corpus entries" do
     root =
       Path.join(System.tmp_dir!(), "program_facts_corpus_#{System.unique_integer([:positive])}")

@@ -80,6 +80,17 @@ variant =
 variant.metadata.transforms
 ```
 
+Use test helpers:
+
+```elixir
+ProgramFacts.ExUnit.assert_compiles(program)
+ProgramFacts.ExUnit.assert_manifest_round_trip(program)
+
+ProgramFacts.ExUnit.with_tmp_project(program, fn dir, program ->
+  assert File.exists?(Path.join(dir, "mix.exs"))
+end)
+```
+
 Save a replayable corpus entry:
 
 ```elixir
