@@ -7,7 +7,7 @@ defmodule ProgramFacts.Corpus do
 
   def save!(%Program{} = program, root) when is_binary(root) do
     dir = Path.join([root, policy_name(program), program.id])
-    ProgramFacts.Project.write!(dir, program)
+    ProgramFacts.Project.write!(dir, program, force: true)
     dir
   end
 

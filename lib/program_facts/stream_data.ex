@@ -23,7 +23,7 @@ defmodule ProgramFacts.StreamData do
   defp generator_options(opts) do
     %{
       policies: Keyword.get(opts, :policies, ProgramFacts.policies()),
-      seed_range: Keyword.get(opts, :min_seed, 1)..Keyword.get(opts, :max_seed, 1_000_000),
+      seed_range: Keyword.get(opts, :min_seed, 1)..Keyword.get(opts, :max_seed, 1_000),
       depth_range: Keyword.get(opts, :min_depth, 2)..Keyword.get(opts, :max_depth, 8),
       width_range: Keyword.get(opts, :min_width, 2)..Keyword.get(opts, :max_width, 6)
     }

@@ -39,6 +39,12 @@ defmodule ProgramFactsTest do
            ]
   end
 
+  test "rejects unbounded seeds and sizes" do
+    assert_raise ArgumentError, ~r/seed/, fn -> ProgramFacts.generate!(seed: 10_001) end
+    assert_raise ArgumentError, ~r/depth/, fn -> ProgramFacts.generate!(depth: 27) end
+    assert_raise ArgumentError, ~r/width/, fn -> ProgramFacts.generate!(width: 26) end
+  end
+
   test "generates a deterministic linear call chain" do
     program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 11, depth: 4)
 
@@ -170,6 +176,8 @@ defmodule ProgramFactsTest do
     program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 39, depth: 2)
     map = ProgramFacts.to_map(program)
 
+    assert map["schema_version"] == 1
+    assert map["program_facts_version"] == "0.1.0"
     assert map["id"] == "pf_39_linear_call_chain"
     assert [%{"path" => _, "source" => _, "kind" => "elixir"}, _] = map["files"]
 
@@ -192,6 +200,27 @@ defmodule ProgramFactsTest do
       end
     after
       File.rm_rf!(dir)
+    end
+  end
+
+  test "refuses to overwrite non-empty directories unless forced" do
+    root =
+      Path.join(System.tmp_dir!(), "program_facts_write_#{System.unique_integer([:positive])}")
+
+    program = ProgramFacts.generate!(policy: :single_call, seed: 41)
+
+    try do
+      File.mkdir_p!(root)
+      File.write!(Path.join(root, "existing.txt"), "keep")
+
+      assert_raise ArgumentError, ~r/non-empty/, fn ->
+        ProgramFacts.Project.write!(root, program)
+      end
+
+      assert ProgramFacts.Project.write!(root, program, force: true) == root
+      assert File.exists?(Path.join(root, "mix.exs"))
+    after
+      File.rm_rf!(root)
     end
   end
 

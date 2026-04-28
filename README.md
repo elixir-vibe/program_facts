@@ -50,6 +50,7 @@ program.facts.locations
 
 ProgramFacts.to_map(program)
 ProgramFacts.to_json!(program)
+# JSON includes schema_version and program_facts_version.
 
 umbrella_program =
   ProgramFacts.generate!(
@@ -69,6 +70,9 @@ Write a generated Mix project to a temporary directory. The project includes a `
     seed: 42
   )
 ```
+
+`ProgramFacts.Project.write!/3` refuses to overwrite non-empty directories unless `force: true` is passed.
+Seeds are bounded to `0..10_000` because generated module names are atoms.
 
 Apply fact-aware transformations:
 

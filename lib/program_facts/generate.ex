@@ -1,7 +1,10 @@
 defmodule ProgramFacts.Generate do
   @moduledoc false
 
-  alias ProgramFacts.{Facts, File, Layout, Locations, Program}
+  alias ProgramFacts.{Facts, File, Layout, Locations, Naming, Program}
+
+  @max_seed Naming.max_seed()
+  @max_module_count Naming.max_module_count()
 
   @policies [
     :single_call,
@@ -38,10 +41,42 @@ defmodule ProgramFacts.Generate do
         layout: :plain
       )
 
+    opts = validate_ranges!(opts)
+
     opts[:policy]
     |> generate_policy!(opts)
     |> Layout.apply(opts[:layout])
     |> Locations.attach()
+  end
+
+  defp validate_ranges!(opts) do
+    validate_seed!(opts[:seed])
+    validate_depth!(opts[:depth])
+    validate_width!(opts[:width])
+    opts
+  end
+
+  defp validate_seed!(seed) when is_integer(seed) and seed >= 0 and seed <= @max_seed,
+    do: :ok
+
+  defp validate_seed!(_seed) do
+    raise ArgumentError, ":seed must be an integer between 0 and #{@max_seed}"
+  end
+
+  defp validate_depth!(depth)
+       when is_integer(depth) and depth >= 1 and depth <= @max_module_count,
+       do: :ok
+
+  defp validate_depth!(_depth) do
+    raise ArgumentError, ":depth must be an integer between 1 and #{@max_module_count}"
+  end
+
+  defp validate_width!(width)
+       when is_integer(width) and width >= 1 and width < @max_module_count,
+       do: :ok
+
+  defp validate_width!(_width) do
+    raise ArgumentError, ":width must be an integer between 1 and #{@max_module_count - 1}"
   end
 
   defp generate_policy!(:single_call, opts),
@@ -82,8 +117,8 @@ defmodule ProgramFacts.Generate do
   defp linear_call_chain(opts, policy) do
     seed = opts[:seed]
     depth = max(opts[:depth], 2)
-    modules = modules(seed, depth)
-    functions = Enum.map(modules, &{&1, function_name(&1), 1})
+    modules = Naming.modules(seed, depth)
+    functions = Enum.map(modules, &{&1, Naming.function_name(&1), 1})
 
     files =
       modules
@@ -113,9 +148,9 @@ defmodule ProgramFacts.Generate do
   defp branching_call_graph(opts) do
     seed = opts[:seed]
     width = max(opts[:width], 2)
-    [entry_module | branch_modules] = modules(seed, width + 1)
+    [entry_module | branch_modules] = Naming.modules(seed, width + 1)
     entry = {entry_module, :entry, 1}
-    branches = Enum.map(branch_modules, &{&1, function_name(&1), 1})
+    branches = Enum.map(branch_modules, &{&1, Naming.function_name(&1), 1})
 
     files =
       [
@@ -141,8 +176,8 @@ defmodule ProgramFacts.Generate do
   defp module_cycle(opts) do
     seed = opts[:seed]
     depth = max(opts[:depth], 2)
-    modules = modules(seed, depth)
-    functions = Enum.map(modules, &{&1, function_name(&1), 1})
+    modules = Naming.modules(seed, depth)
+    functions = Enum.map(modules, &{&1, Naming.function_name(&1), 1})
     cycle_modules = modules ++ [hd(modules)]
     cycle_functions = functions ++ [hd(functions)]
 
@@ -171,7 +206,7 @@ defmodule ProgramFacts.Generate do
 
   defp straight_line_data_flow(opts, policy) do
     seed = opts[:seed]
-    [entry_module, helper_module, sink_module] = modules(seed, 3)
+    [entry_module, helper_module, sink_module] = Naming.modules(seed, 3)
 
     entry = {entry_module, :entry, 1}
     helper = {helper_module, :normalize, 1}
@@ -201,7 +236,7 @@ defmodule ProgramFacts.Generate do
 
   defp assignment_chain(opts) do
     seed = opts[:seed]
-    [module] = modules(seed, 1)
+    [module] = Naming.modules(seed, 1)
     entry = {module, :entry, 1}
 
     source = """
@@ -238,7 +273,7 @@ defmodule ProgramFacts.Generate do
 
   defp pipeline_data_flow(opts) do
     seed = opts[:seed]
-    [entry_module, helper_module, sink_module] = modules(seed, 3)
+    [entry_module, helper_module, sink_module] = Naming.modules(seed, 3)
     entry = {entry_module, :entry, 1}
     helper = {helper_module, :normalize, 1}
     sink = {sink_module, :sink, 1}
@@ -267,7 +302,7 @@ defmodule ProgramFacts.Generate do
 
   defp if_else(opts) do
     seed = opts[:seed]
-    [entry_module, ok_module, error_module] = modules(seed, 3)
+    [entry_module, ok_module, error_module] = Naming.modules(seed, 3)
     entry = {entry_module, :entry, 1}
     ok = {ok_module, :ok, 1}
     error = {error_module, :error, 1}
@@ -293,7 +328,7 @@ defmodule ProgramFacts.Generate do
 
   defp case_clauses(opts) do
     seed = opts[:seed]
-    [entry_module, ok_module, error_module] = modules(seed, 3)
+    [entry_module, ok_module, error_module] = Naming.modules(seed, 3)
     entry = {entry_module, :entry, 1}
     ok = {ok_module, :ok, 1}
     error = {error_module, :error, 1}
@@ -319,7 +354,7 @@ defmodule ProgramFacts.Generate do
 
   defp cond_branches(opts) do
     seed = opts[:seed]
-    [entry_module, ok_module, error_module] = modules(seed, 3)
+    [entry_module, ok_module, error_module] = Naming.modules(seed, 3)
     entry = {entry_module, :entry, 1}
     ok = {ok_module, :ok, 1}
     error = {error_module, :error, 1}
@@ -345,7 +380,7 @@ defmodule ProgramFacts.Generate do
 
   defp with_chain(opts) do
     seed = opts[:seed]
-    [entry_module, ok_module, error_module] = modules(seed, 3)
+    [entry_module, ok_module, error_module] = Naming.modules(seed, 3)
     entry = {entry_module, :entry, 1}
     ok = {ok_module, :ok, 1}
     error = {error_module, :error, 1}
@@ -371,7 +406,7 @@ defmodule ProgramFacts.Generate do
 
   defp anonymous_fn_branch(opts) do
     seed = opts[:seed]
-    [entry_module, ok_module, error_module] = modules(seed, 3)
+    [entry_module, ok_module, error_module] = Naming.modules(seed, 3)
     entry = {entry_module, :entry, 1}
     ok = {ok_module, :ok, 1}
     error = {error_module, :error, 1}
@@ -397,7 +432,7 @@ defmodule ProgramFacts.Generate do
 
   defp multi_clause_function(opts) do
     seed = opts[:seed]
-    [entry_module, ok_module, error_module] = modules(seed, 3)
+    [entry_module, ok_module, error_module] = Naming.modules(seed, 3)
     entry = {entry_module, :entry, 1}
     ok = {ok_module, :ok, 1}
     error = {error_module, :error, 1}
@@ -440,7 +475,7 @@ defmodule ProgramFacts.Generate do
 
   defp single_effect(opts, effect) do
     seed = opts[:seed]
-    [module] = modules(seed, 1)
+    [module] = Naming.modules(seed, 1)
     function = effect_function(effect)
     mfa = {module, function, effect_arity(effect)}
 
@@ -460,7 +495,7 @@ defmodule ProgramFacts.Generate do
 
   defp mixed_effect_boundary(opts) do
     seed = opts[:seed]
-    [module] = modules(seed, 1)
+    [module] = Naming.modules(seed, 1)
     function = {module, :boundary, 2}
 
     %Program{
@@ -683,7 +718,7 @@ defmodule ProgramFacts.Generate do
   end
 
   defp render_chain_module(module, nil) do
-    function = function_name(module)
+    function = Naming.function_name(module)
 
     source = """
     defmodule #{inspect(module)} do
@@ -697,8 +732,8 @@ defmodule ProgramFacts.Generate do
   end
 
   defp render_chain_module(module, next_module) do
-    function = function_name(module)
-    next_function = function_name(next_module)
+    function = Naming.function_name(module)
+    next_function = Naming.function_name(next_module)
 
     source = """
     defmodule #{inspect(module)} do
@@ -714,7 +749,7 @@ defmodule ProgramFacts.Generate do
   defp render_branch_entry_module(module, branch_modules) do
     branch_calls =
       Enum.map_join(branch_modules, ",\n      ", fn branch_module ->
-        "#{inspect(branch_module)}.#{function_name(branch_module)}(value)"
+        "#{inspect(branch_module)}.#{Naming.function_name(branch_module)}(value)"
       end)
 
     source = """
@@ -787,39 +822,7 @@ defmodule ProgramFacts.Generate do
   end
 
   defp file(module, source) do
-    %File{path: module_path(module), source: source, kind: :elixir}
-  end
-
-  defp modules(seed, count) do
-    namespace = Module.concat([Generated, ProgramFacts, "Seed#{seed}"])
-
-    0..(count - 1)
-    |> Enum.map(fn index -> Module.concat(namespace, module_suffix(index)) end)
-  end
-
-  defp module_suffix(index) do
-    index
-    |> then(&(&1 + ?A))
-    |> List.wrap()
-    |> to_string()
-  end
-
-  defp function_name(module) do
-    module
-    |> Module.split()
-    |> List.last()
-    |> String.downcase()
-    |> String.to_atom()
-  end
-
-  defp module_path(module) do
-    path =
-      module
-      |> Module.split()
-      |> Enum.map(&Macro.underscore/1)
-      |> Path.join()
-
-    Path.join("lib", path <> ".ex")
+    %File{path: Naming.module_path(module), source: source, kind: :elixir}
   end
 
   defp pairwise_edges(functions) do

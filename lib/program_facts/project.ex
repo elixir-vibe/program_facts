@@ -18,25 +18,44 @@ defmodule ProgramFacts.Project do
     root = Keyword.get(opts, :root, System.tmp_dir!())
     dir = Path.join(root, program.id <> "_" <> unique_suffix())
 
-    write!(dir, program)
+    write!(dir, program, force: true)
 
     {:ok, dir, program}
   end
 
-  def write!(dir, %Program{} = program) do
-    File.rm_rf!(dir)
-    File.mkdir_p!(dir)
+  def write!(dir, %Program{} = program, opts \\ []) do
+    prepare_dir!(dir, opts)
     File.write!(Path.join(dir, "mix.exs"), mix_project_source(program))
     File.write!(Path.join(dir, "program_facts.json"), ProgramFacts.to_json!(program))
     write_excluded_files!(dir, program)
+    write_source_files!(dir, program.files)
+    dir
+  end
 
-    Enum.each(program.files, fn file ->
+  defp prepare_dir!(dir, opts) do
+    if Keyword.get(opts, :force, false) do
+      File.rm_rf!(dir)
+      File.mkdir_p!(dir)
+    else
+      create_empty_dir!(dir)
+    end
+  end
+
+  defp create_empty_dir!(dir) do
+    case File.ls(dir) do
+      {:ok, []} -> :ok
+      {:ok, _entries} -> raise ArgumentError, "refusing to write into non-empty directory: #{dir}"
+      {:error, :enoent} -> File.mkdir_p!(dir)
+      {:error, reason} -> raise File.Error, reason: reason, action: "list directory", path: dir
+    end
+  end
+
+  defp write_source_files!(dir, files) do
+    Enum.each(files, fn file ->
       path = Path.join(dir, file.path)
       File.mkdir_p!(Path.dirname(path))
       File.write!(path, file.source)
     end)
-
-    dir
   end
 
   defp write_excluded_files!(dir, program) do
@@ -46,13 +65,16 @@ defmodule ProgramFacts.Project do
     |> Enum.each(fn relative_path ->
       path = Path.join(dir, relative_path)
       File.mkdir_p!(Path.dirname(path))
-
-      File.write!(path, """
-      defmodule Generated.ProgramFacts.Excluded do
-        def ignored(value), do: value
-      end
-      """)
+      File.write!(path, excluded_source())
     end)
+  end
+
+  defp excluded_source do
+    """
+    defmodule Generated.ProgramFacts.Excluded do
+      def ignored(value), do: value
+    end
+    """
   end
 
   defp mix_project_source(program) do
