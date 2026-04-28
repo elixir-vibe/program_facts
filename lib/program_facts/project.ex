@@ -89,6 +89,7 @@ defmodule ProgramFacts.Project do
           app: #{inspect(app)},
           version: "0.1.0",
           elixir: "~> 1.19",
+          elixirc_paths: #{inspect(elixirc_paths(program))},
           start_permanent: Mix.env() == :prod,
           deps: []
         ]
@@ -99,6 +100,23 @@ defmodule ProgramFacts.Project do
       end
     end
     """
+  end
+
+  defp elixirc_paths(program) do
+    program.files
+    |> Enum.filter(&(&1.kind == :elixir))
+    |> Enum.map(&source_root/1)
+    |> Enum.uniq()
+  end
+
+  defp source_root(file) do
+    file.path
+    |> Path.split()
+    |> Enum.split_while(&(&1 != "lib"))
+    |> case do
+      {prefix, ["lib" | _rest]} -> Path.join(prefix ++ ["lib"])
+      _no_lib_path -> Path.dirname(file.path)
+    end
   end
 
   defp unique_suffix do

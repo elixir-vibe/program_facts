@@ -224,13 +224,23 @@ defmodule ProgramFactsTest do
     end
   end
 
-  test "written temporary project compiles with Mix" do
-    {:ok, dir, _program} = ProgramFacts.Project.write_tmp!(policy: :pipeline_data_flow, seed: 41)
+  test "written temporary projects compile generated files with Mix across layouts" do
+    for layout <- ProgramFacts.layouts() do
+      {:ok, dir, program} =
+        ProgramFacts.Project.write_tmp!(policy: :pipeline_data_flow, seed: 41, layout: layout)
 
-    try do
-      assert {_, 0} = System.cmd("mix", ["compile"], cd: dir, stderr_to_stdout: true)
-    after
-      File.rm_rf!(dir)
+      try do
+        assert {_, 0} = System.cmd("mix", ["compile"], cd: dir, stderr_to_stdout: true)
+
+        beam_paths =
+          Path.wildcard(
+            Path.join(dir, "_build/dev/lib/*/ebin/Elixir.Generated.ProgramFacts*.beam")
+          )
+
+        assert length(beam_paths) == length(program.facts.modules)
+      after
+        File.rm_rf!(dir)
+      end
     end
   end
 
