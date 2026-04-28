@@ -17,7 +17,7 @@ The first implementation slice supports deterministic generation of:
 - pipeline data-flow programs
 - if/else branch programs
 - case clause programs
-- multi-clause function programs
+- cond, with, anonymous function branch, and multi-clause function programs
 - pure/io/send/raise effect programs
 - mixed-effect boundary programs
 - plain, umbrella, and package-style project layouts
@@ -104,6 +104,9 @@ ProgramFacts.policies()
 #=>   :pipeline_data_flow,
 #=>   :if_else,
 #=>   :case_clauses,
+#=>   :cond_branches,
+#=>   :with_chain,
+#=>   :anonymous_fn_branch,
 #=>   :multi_clause_function,
 #=>   :pure,
 #=>   :io_effect,

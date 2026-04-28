@@ -13,6 +13,9 @@ defmodule ProgramFacts.Generate do
     :pipeline_data_flow,
     :if_else,
     :case_clauses,
+    :cond_branches,
+    :with_chain,
+    :anonymous_fn_branch,
     :multi_clause_function,
     :pure,
     :io_effect,
@@ -46,6 +49,9 @@ defmodule ProgramFacts.Generate do
         :pipeline_data_flow -> pipeline_data_flow(opts)
         :if_else -> if_else(opts)
         :case_clauses -> case_clauses(opts)
+        :cond_branches -> cond_branches(opts)
+        :with_chain -> with_chain(opts)
+        :anonymous_fn_branch -> anonymous_fn_branch(opts)
         :multi_clause_function -> multi_clause_function(opts)
         :pure -> single_effect(opts, :pure)
         :io_effect -> single_effect(opts, :io)
@@ -298,6 +304,84 @@ defmodule ProgramFacts.Generate do
     branch_program(seed, :case_clauses, files, [entry, ok, error], branch)
   end
 
+  defp cond_branches(opts) do
+    seed = opts[:seed]
+    [entry_module, ok_module, error_module] = modules(seed, 3)
+    entry = {entry_module, :entry, 1}
+    ok = {ok_module, :ok, 1}
+    error = {error_module, :error, 1}
+
+    files = [
+      render_cond_module(entry_module, ok_module, error_module),
+      render_named_sink_module(ok_module, :ok),
+      render_named_sink_module(error_module, :error)
+    ]
+
+    branch = %{
+      function: entry,
+      kind: :cond,
+      clauses: 2,
+      calls_by_clause: [
+        %{label: "input == :ok", call: ok},
+        %{label: "true", call: error}
+      ]
+    }
+
+    branch_program(seed, :cond_branches, files, [entry, ok, error], branch)
+  end
+
+  defp with_chain(opts) do
+    seed = opts[:seed]
+    [entry_module, ok_module, error_module] = modules(seed, 3)
+    entry = {entry_module, :entry, 1}
+    ok = {ok_module, :ok, 1}
+    error = {error_module, :error, 1}
+
+    files = [
+      render_with_module(entry_module, ok_module, error_module),
+      render_named_sink_module(ok_module, :ok),
+      render_named_sink_module(error_module, :error)
+    ]
+
+    branch = %{
+      function: entry,
+      kind: :with,
+      clauses: 2,
+      calls_by_clause: [
+        %{label: "{:ok, value}", call: ok},
+        %{label: "else", call: error}
+      ]
+    }
+
+    branch_program(seed, :with_chain, files, [entry, ok, error], branch)
+  end
+
+  defp anonymous_fn_branch(opts) do
+    seed = opts[:seed]
+    [entry_module, ok_module, error_module] = modules(seed, 3)
+    entry = {entry_module, :entry, 1}
+    ok = {ok_module, :ok, 1}
+    error = {error_module, :error, 1}
+
+    files = [
+      render_anonymous_fn_branch_module(entry_module, ok_module, error_module),
+      render_named_sink_module(ok_module, :ok),
+      render_named_sink_module(error_module, :error)
+    ]
+
+    branch = %{
+      function: entry,
+      kind: :anonymous_fn,
+      clauses: 2,
+      calls_by_clause: [
+        %{label: "{:ok, value}", call: ok},
+        %{label: "{:error, reason}", call: error}
+      ]
+    }
+
+    branch_program(seed, :anonymous_fn_branch, files, [entry, ok, error], branch)
+  end
+
   defp multi_clause_function(opts) do
     seed = opts[:seed]
     [entry_module, ok_module, error_module] = modules(seed, 3)
@@ -495,6 +579,61 @@ defmodule ProgramFacts.Generate do
           {:error, reason} ->
             #{inspect(error_module)}.error(reason)
         end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_cond_module(module, ok_module, error_module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        cond do
+          input == :ok ->
+            #{inspect(ok_module)}.ok(input)
+
+          true ->
+            #{inspect(error_module)}.error(input)
+        end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_with_module(module, ok_module, error_module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        with {:ok, value} <- input do
+          #{inspect(ok_module)}.ok(value)
+        else
+          {:error, reason} ->
+            #{inspect(error_module)}.error(reason)
+        end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  defp render_anonymous_fn_branch_module(module, ok_module, error_module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        dispatch = fn
+          {:ok, value} ->
+            #{inspect(ok_module)}.ok(value)
+
+          {:error, reason} ->
+            #{inspect(error_module)}.error(reason)
+        end
+
+        dispatch.(input)
       end
     end
     """

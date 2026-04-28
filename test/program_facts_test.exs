@@ -27,6 +27,9 @@ defmodule ProgramFactsTest do
              :pipeline_data_flow,
              :if_else,
              :case_clauses,
+             :cond_branches,
+             :with_chain,
+             :anonymous_fn_branch,
              :multi_clause_function,
              :pure,
              :io_effect,
@@ -87,7 +90,14 @@ defmodule ProgramFactsTest do
   end
 
   test "generates branch facts" do
-    for policy <- [:if_else, :case_clauses, :multi_clause_function] do
+    for policy <- [
+          :if_else,
+          :case_clauses,
+          :cond_branches,
+          :with_chain,
+          :anonymous_fn_branch,
+          :multi_clause_function
+        ] do
       program = ProgramFacts.generate!(policy: policy, seed: 16)
       [branch] = program.facts.branches
       [entry, ok, error] = program.facts.functions
