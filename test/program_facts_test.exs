@@ -8,9 +8,17 @@ defmodule ProgramFactsTest do
 
   test "lists supported transforms" do
     assert ProgramFacts.transforms() == [
+             :rename_variables,
              :add_dead_pure_statement,
+             :add_dead_branch,
+             :extract_helper,
+             :inline_helper,
+             :wrap_in_if_true,
+             :wrap_in_case_identity,
+             :reorder_independent_assignments,
+             :split_module_files,
              :add_unrelated_module,
-             :rename_variables
+             :add_alias_and_rewrite_remote_call
            ]
   end
 
@@ -23,19 +31,30 @@ defmodule ProgramFactsTest do
              :module_cycle,
              :straight_line_data_flow,
              :assignment_chain,
+             :branch_data_flow,
              :helper_call_data_flow,
              :pipeline_data_flow,
+             :return_data_flow,
              :if_else,
              :case_clauses,
              :cond_branches,
              :with_chain,
              :anonymous_fn_branch,
              :multi_clause_function,
+             :nested_branches,
              :pure,
              :io_effect,
              :send_effect,
              :raise_effect,
-             :mixed_effect_boundary
+             :read_effect,
+             :write_effect,
+             :mixed_effect_boundary,
+             :layered_valid,
+             :forbidden_dependency,
+             :layer_cycle,
+             :public_api_boundary_violation,
+             :internal_boundary_violation,
+             :allowed_effect_violation
            ]
   end
 
@@ -43,6 +62,15 @@ defmodule ProgramFactsTest do
     assert_raise ArgumentError, ~r/seed/, fn -> ProgramFacts.generate!(seed: 10_001) end
     assert_raise ArgumentError, ~r/depth/, fn -> ProgramFacts.generate!(depth: 27) end
     assert_raise ArgumentError, ~r/width/, fn -> ProgramFacts.generate!(width: 26) end
+  end
+
+  test "projects programs into semantic summary models" do
+    program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 10, depth: 3)
+    model = ProgramFacts.model(program)
+
+    assert model.id == program.id
+    assert model.policy == :linear_call_chain
+    assert model.relationships.call_edges == program.facts.call_edges
   end
 
   test "generates a deterministic linear call chain" do
@@ -102,15 +130,17 @@ defmodule ProgramFactsTest do
           :cond_branches,
           :with_chain,
           :anonymous_fn_branch,
-          :multi_clause_function
+          :multi_clause_function,
+          :nested_branches
         ] do
       program = ProgramFacts.generate!(policy: policy, seed: 16)
       [branch] = program.facts.branches
-      [entry, ok, error] = program.facts.functions
+      [entry, ok | _rest] = program.facts.functions
 
       assert branch.function == entry
       assert branch.clauses == 2
-      assert program.facts.call_edges == [{entry, ok}, {entry, error}]
+      assert length(program.facts.call_edges) >= 2
+      assert {entry, ok} in program.facts.call_edges
       assert MapSet.member?(program.facts.features, :branch)
     end
   end
@@ -131,7 +161,9 @@ defmodule ProgramFactsTest do
       pure: :pure,
       io_effect: :io,
       send_effect: :send,
-      raise_effect: :exception
+      raise_effect: :exception,
+      read_effect: :read,
+      write_effect: :write
     ]
 
     for {policy, effect} <- cases do
@@ -149,6 +181,16 @@ defmodule ProgramFactsTest do
 
     assert Enum.sort(program.facts.effects) == Enum.sort([{function, :io}, {function, :send}])
     assert MapSet.member?(program.facts.features, :mixed_effect_boundary)
+  end
+
+  test "generates architecture policy facts" do
+    valid = ProgramFacts.generate!(policy: :layered_valid, seed: 18)
+    invalid = ProgramFacts.generate!(policy: :forbidden_dependency, seed: 19)
+
+    assert valid.facts.architecture.valid?
+    refute invalid.facts.architecture.valid?
+    assert [%{type: :forbidden_dependency}] = invalid.facts.architecture.violations
+    assert Enum.any?(invalid.files, &(&1.path == ".reach.exs"))
   end
 
   test "applies project layouts" do
@@ -276,6 +318,33 @@ defmodule ProgramFactsTest do
     assert_compiles(variant)
   end
 
+  test "all transforms produce compilable programs" do
+    for transform <- ProgramFacts.transforms() do
+      program = ProgramFacts.generate!(policy: :straight_line_data_flow, seed: 48)
+      variant = ProgramFacts.Transform.apply!(program, transform)
+
+      assert Enum.any?(variant.metadata.transforms, &(&1.name == transform))
+      assert_compiles(variant)
+    end
+  end
+
+  test "extracts and inlines helper calls" do
+    program = ProgramFacts.generate!(policy: :single_call, seed: 49)
+    extracted = ProgramFacts.Transform.apply!(program, :extract_helper)
+    inlined = ProgramFacts.Transform.apply!(extracted, :inline_helper)
+
+    assert Enum.any?(extracted.facts.functions, fn {_module, function, _arity} ->
+             function == :program_facts_identity
+           end)
+
+    refute Enum.any?(inlined.facts.functions, fn {_module, function, _arity} ->
+             function == :program_facts_identity
+           end)
+
+    assert_compiles(extracted)
+    assert_compiles(inlined)
+  end
+
   test "adds unrelated modules without changing existing edges" do
     program = ProgramFacts.generate!(policy: :single_call, seed: 45)
     variant = ProgramFacts.Transform.apply!(program, :add_unrelated_module)
@@ -298,6 +367,14 @@ defmodule ProgramFactsTest do
     end)
   end
 
+  test "runs feedback-directed feature search" do
+    result = ProgramFacts.Search.run(iterations: 10, seed: 60)
+
+    assert result.coverage.program_count == length(result.programs)
+    assert result.coverage.feature_count == MapSet.size(result.features)
+    assert result.coverage.program_count > 0
+  end
+
   test "saves replayable corpus entries" do
     root =
       Path.join(System.tmp_dir!(), "program_facts_corpus_#{System.unique_integer([:positive])}")
@@ -311,12 +388,16 @@ defmodule ProgramFactsTest do
       assert Path.basename(Path.dirname(dir)) == "case_clauses"
       assert manifest["id"] == program.id
       assert File.exists?(Path.join(dir, hd(program.files).path))
+      assert ProgramFacts.Corpus.manifests(root) == [Path.join(dir, "program_facts.json")]
+      assert [loaded] = ProgramFacts.Corpus.load_manifests!(root)
+      assert loaded["id"] == program.id
     after
       File.rm_rf!(root)
     end
   end
 
   defp assert_compiles(program) do
+    purge_modules(program.facts.modules)
     source = Enum.map_join(program.files, "\n", & &1.source)
 
     modules =
@@ -325,5 +406,12 @@ defmodule ProgramFactsTest do
       |> Enum.map(fn {module, _bytecode} -> module end)
 
     assert Enum.sort(modules) == Enum.sort(program.facts.modules)
+  end
+
+  defp purge_modules(modules) do
+    Enum.each(modules, fn module ->
+      :code.purge(module)
+      :code.delete(module)
+    end)
   end
 end

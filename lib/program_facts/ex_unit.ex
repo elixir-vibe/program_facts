@@ -55,9 +55,18 @@ defmodule ProgramFacts.ExUnit do
   end
 
   defp compile_modules(program) do
+    purge_modules(program.facts.modules)
+
     program.files
     |> Enum.map_join("\n", & &1.source)
     |> Code.compile_string("generated_program.exs")
     |> Enum.map(fn {module, _bytecode} -> module end)
+  end
+
+  defp purge_modules(modules) do
+    Enum.each(modules, fn module ->
+      :code.purge(module)
+      :code.delete(module)
+    end)
   end
 end

@@ -13,7 +13,23 @@ The package should not merely generate syntactically valid Elixir. It should gen
 - Keep Reach-specific assertions outside this package.
 - Start with a small Elixir subset and expand only when tests need it.
 
-## Public API target
+## Current status
+
+Completed package-side work through the original roadmap, excluding Reach integration.
+
+- Phase 0: complete.
+- Phase 1: complete.
+- Phase 2: complete for planned Elixir policies.
+- Phase 3: complete for planned branch policies.
+- Phase 4: complete for planned effect policies.
+- Phase 5: complete for package-side architecture fixtures.
+- Phase 6: complete for Elixir layouts; Erlang layouts remain future work.
+- Phase 7: complete for the planned initial transform set.
+- Phase 8: initial feedback-directed feature search implemented.
+- Phase 9: initial corpus persistence and manifest loading implemented.
+- Reach integration: intentionally not started.
+
+## Public API
 
 ```elixir
 program =
@@ -26,6 +42,8 @@ program =
 program.files
 program.facts.call_edges
 program.facts.call_paths
+ProgramFacts.model(program)
+ProgramFacts.to_json!(program)
 ```
 
 ```elixir
@@ -48,7 +66,7 @@ program.facts.call_paths
 }
 ```
 
-Facts should include:
+Facts include:
 
 - `modules`
 - `functions`
@@ -63,23 +81,28 @@ Facts should include:
 
 ## Phase 0 — package bootstrap
 
+Status: complete.
+
+Implemented:
+
 - Mix project
-- CI-ready test setup
+- CI alias
 - Formatter
 - README
 - Roadmap
 - Basic package metadata
 - Deterministic generation API
-
-Definition of done:
-
-- `mix test` passes
-- `mix format --check-formatted` passes
-- `mix hex.build` succeeds
+- Hex build verification
+- Credo strict
+- ExDNA
+- Dialyzer
+- ExUnit tests
 
 ## Phase 1 — call graph generator
 
-Policies:
+Status: complete.
+
+Implemented policies:
 
 - `:single_call`
 - `:linear_call_chain`
@@ -87,28 +110,25 @@ Policies:
 - `:module_dependency_chain`
 - `:module_cycle`
 
-Initial facts:
+Facts:
 
 - modules
 - functions
 - call edges
 - call paths
+- cycle architecture fact for `:module_cycle`
 
-Reach integration target:
+Reach integration target remains future work:
 
 ```sh
 mix reach.inspect Generated.A.entry/1 --why Generated.C.sink/1 --format json
 ```
 
-Definition of done:
-
-- Generated source compiles
-- Facts are deterministic
-- Reach can consume generated files
-
 ## Phase 2 — data-flow generator
 
-Policies:
+Status: complete for planned Elixir policies.
+
+Implemented policies:
 
 - `:straight_line_data_flow`
 - `:assignment_chain`
@@ -117,14 +137,16 @@ Policies:
 - `:pipeline_data_flow`
 - `:return_data_flow`
 
-Initial facts:
+Facts:
 
 - parameter-to-variable flow
 - variable-to-call-argument flow
 - helper argument-to-return flow
+- branch data-flow descriptors
+- return data-flow descriptors
 - source/sink descriptors
 
-Reach integration targets:
+Reach integration targets remain future work:
 
 ```sh
 mix reach.trace --from input --to sink --format json
@@ -133,7 +155,9 @@ mix reach.map --data --format json
 
 ## Phase 3 — branch/control-flow generator
 
-Policies:
+Status: complete for planned branch policies.
+
+Implemented policies:
 
 - `:if_else`
 - `:case_clauses`
@@ -143,17 +167,21 @@ Policies:
 - `:anonymous_fn_branch`
 - `:nested_branches`
 
-Targets:
+Facts:
 
-- CFG generation
-- block quality
-- clause edge labels
-- `reach.inspect --graph`
-- `reach.map --depth`
+- branch kind
+- clause count
+- clause labels
+- nested branch descriptors
+- calls by clause
+- call edges
+- call paths
 
 ## Phase 4 — effect generator
 
-Policies:
+Status: complete for planned effect policies.
+
+Implemented policies:
 
 - `:pure`
 - `:io_effect`
@@ -163,7 +191,7 @@ Policies:
 - `:write_effect`
 - `:mixed_effect_boundary`
 
-Targets:
+Targets remain future Reach integration work:
 
 ```sh
 mix reach.map --effects --format json
@@ -172,7 +200,9 @@ mix reach.check --candidates --format json
 
 ## Phase 5 — architecture/policy generator
 
-Policies:
+Status: package-side fixtures implemented.
+
+Implemented policies:
 
 - `:layered_valid`
 - `:forbidden_dependency`
@@ -181,84 +211,87 @@ Policies:
 - `:internal_boundary_violation`
 - `:allowed_effect_violation`
 
-Targets:
-
-```sh
-mix reach.check --arch --format json
-```
+Generated projects include `.reach.exs` fixtures and architecture facts. Reach validation remains future work.
 
 ## Phase 6 — project layout generator
 
-Layouts:
+Status: complete for Elixir layouts.
 
-- `lib/**/*.ex`
-- `apps/*/lib/**/*.ex`
-- `*/lib/**/*.ex`
+Implemented layouts:
+
+- `lib/**/*.ex` via `:plain`
+- `apps/*/lib/**/*.ex` via `:umbrella`
+- `*/lib/**/*.ex` via `:package_style`
+- generated `deps/` excluded fixture files
+- generated `_build/` excluded fixture files
+- layout-aware generated `mix.exs` with `elixirc_paths`
+
+Future work:
+
 - `src/**/*.erl`
 - `apps/*/src/**/*.erl`
 - `*/src/**/*.erl`
-- exclude `deps/`
-- exclude `_build/`
-
-Start with Elixir layouts only.
 
 ## Phase 7 — metamorphic transformations
 
-Transforms:
+Status: complete for planned initial transform set.
 
-- rename variables
-- add dead pure statement
-- add dead branch
-- extract helper
-- inline helper
-- wrap in `if true`
-- wrap in identity `case`
-- reorder independent assignments
-- split module files
-- add unrelated module
-- add alias and rewrite remote call
+Implemented transforms:
 
-Each transform must declare which facts it preserves.
+- `:rename_variables`
+- `:add_dead_pure_statement`
+- `:add_dead_branch`
+- `:extract_helper`
+- `:inline_helper`
+- `:wrap_in_if_true`
+- `:wrap_in_case_identity`
+- `:reorder_independent_assignments`
+- `:split_module_files`
+- `:add_unrelated_module`
+- `:add_alias_and_rewrite_remote_call`
+
+All source transforms are AST-based. No library code rewrites Elixir source with regex.
 
 ## Phase 8 — feedback-directed generation
 
-Track feature coverage:
+Status: initial implementation complete.
 
-- constructs
-- call shapes
-- data shapes
-- effects
-- layouts
-- target resolution forms
+Implemented:
 
-Use objectives to generate more structurally diverse programs.
+```elixir
+ProgramFacts.Search.run(iterations: 50, seed: 100)
+```
+
+The search keeps programs that add new feature coverage and reports feature/program counts.
 
 ## Phase 9 — corpus management
 
-Save interesting generated programs as replayable fixtures:
+Status: initial implementation complete.
 
-```text
-corpus/reach/call_chain/seed_000123/
-  program_facts.json
-  facts.json
-  lib/generated/a.ex
+Implemented:
+
+```elixir
+ProgramFacts.Corpus.save!(program, root)
+ProgramFacts.Corpus.manifests(root)
+ProgramFacts.Corpus.load_manifest!(dir)
+ProgramFacts.Corpus.load_manifests!(root)
 ```
 
-Corpus entries must include package version, policy, seed, options, files, and facts.
+Corpus entries include:
 
-## First implementation slice
+```text
+program_facts.json
+mix.exs
+lib/generated/...
+```
 
-Implement now:
+`program_facts.json` includes `schema_version`, `program_facts_version`, policy, layout, files, metadata, and facts.
 
-- `ProgramFacts.generate!/1`
-- `ProgramFacts.generate!/0`
-- `ProgramFacts.Project.write_tmp!/1`
-- policies:
-  - `:linear_call_chain`
-  - `:straight_line_data_flow`
-- structs:
-  - `ProgramFacts.Program`
-  - `ProgramFacts.File`
-  - `ProgramFacts.Facts`
+## Remaining work
 
-Then wire into Reach property tests in a separate step.
+- Reach integration tests.
+- Full semantic-model-first generation rather than policy templates projected into `ProgramFacts.Model`.
+- Splitting `ProgramFacts.Generate` into smaller policy/render modules.
+- Erlang source layout generation.
+- Richer source locations for calls, assignments, branches, and clauses.
+- Shrinking/minimization for generated failures.

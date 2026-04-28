@@ -14,14 +14,17 @@ The first implementation slice supports deterministic generation of:
 - straight-line data-flow programs
 - assignment-chain data-flow programs
 - helper-call data-flow programs
-- pipeline data-flow programs
+- pipeline, branch, helper-call, and return data-flow programs
 - if/else branch programs
 - case clause programs
-- cond, with, anonymous function branch, and multi-clause function programs
-- pure/io/send/raise effect programs
+- cond, with, nested, anonymous function branch, and multi-clause function programs
+- pure/io/send/raise/read/write effect programs
 - mixed-effect boundary programs
+- architecture policy fixtures and `.reach.exs` files
 - plain, umbrella, and package-style project layouts
-- temporary Mix projects
+- AST-based metamorphic transforms
+- feedback-directed feature search
+- temporary Mix projects and replayable corpus entries
 
 ## Installation
 
@@ -81,6 +84,7 @@ variant =
   program
   |> ProgramFacts.Transform.apply!([:rename_variables, :add_dead_pure_statement])
 
+ProgramFacts.transforms()
 variant.metadata.transforms
 ```
 
@@ -101,6 +105,23 @@ Save a replayable corpus entry:
 program = ProgramFacts.generate!(policy: :case_clauses, seed: 43)
 dir = ProgramFacts.Corpus.save!(program, "corpus/reach")
 manifest = ProgramFacts.Corpus.load_manifest!(dir)
+ProgramFacts.Corpus.manifests("corpus/reach")
+ProgramFacts.Corpus.load_manifests!("corpus/reach")
+```
+
+Run feedback-directed generation over feature coverage:
+
+```elixir
+result = ProgramFacts.Search.run(iterations: 50, seed: 100)
+result.programs
+result.coverage
+```
+
+Project a program into its semantic summary model:
+
+```elixir
+model = ProgramFacts.model(program)
+model.relationships.call_edges
 ```
 
 ## Policies
@@ -115,19 +136,30 @@ ProgramFacts.policies()
 #=>   :module_cycle,
 #=>   :straight_line_data_flow,
 #=>   :assignment_chain,
+#=>   :branch_data_flow,
 #=>   :helper_call_data_flow,
 #=>   :pipeline_data_flow,
+#=>   :return_data_flow,
 #=>   :if_else,
 #=>   :case_clauses,
 #=>   :cond_branches,
 #=>   :with_chain,
 #=>   :anonymous_fn_branch,
 #=>   :multi_clause_function,
+#=>   :nested_branches,
 #=>   :pure,
 #=>   :io_effect,
 #=>   :send_effect,
 #=>   :raise_effect,
-#=>   :mixed_effect_boundary
+#=>   :read_effect,
+#=>   :write_effect,
+#=>   :mixed_effect_boundary,
+#=>   :layered_valid,
+#=>   :forbidden_dependency,
+#=>   :layer_cycle,
+#=>   :public_api_boundary_violation,
+#=>   :internal_boundary_violation,
+#=>   :allowed_effect_violation
 #=> ]
 ```
 

@@ -12,4 +12,6 @@ defmodule ProgramFacts.Program do
         }
 
   defstruct [:id, :seed, :files, :facts, :metadata]
+
+  def model(%__MODULE__{} = program), do: ProgramFacts.Model.from_program(program)
 end

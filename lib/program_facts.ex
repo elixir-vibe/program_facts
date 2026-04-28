@@ -44,6 +44,11 @@ defmodule ProgramFacts do
   def generate!(opts \\ []), do: Generate.generate!(opts)
 
   @doc """
+  Projects a generated program into its semantic summary model.
+  """
+  def model(program), do: ProgramFacts.Model.from_program(program)
+
+  @doc """
   Converts a generated program, file, or facts struct into a JSON-friendly map.
   """
   def to_map(value), do: Export.to_map(value)
