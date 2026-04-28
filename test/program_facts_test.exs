@@ -6,6 +6,14 @@ defmodule ProgramFactsTest do
     assert ProgramFacts.layouts() == [:plain, :umbrella, :package_style]
   end
 
+  test "lists supported transforms" do
+    assert ProgramFacts.transforms() == [
+             :add_dead_pure_statement,
+             :add_unrelated_module,
+             :rename_variables
+           ]
+  end
+
   test "lists supported policies" do
     assert ProgramFacts.policies() == [
              :single_call,
@@ -198,6 +206,35 @@ defmodule ProgramFactsTest do
     after
       File.rm_rf!(dir)
     end
+  end
+
+  test "applies fact-aware transforms" do
+    program = ProgramFacts.generate!(policy: :straight_line_data_flow, seed: 44)
+
+    variant =
+      ProgramFacts.Transform.apply!(program, [:rename_variables, :add_dead_pure_statement])
+
+    [flow] = variant.facts.data_flows
+
+    refute hd(variant.files).source == hd(program.files).source
+    assert flow.variable_names == [:arg, :x, :item, :y]
+
+    assert Enum.map(variant.metadata.transforms, & &1.name) == [
+             :rename_variables,
+             :add_dead_pure_statement
+           ]
+
+    assert_compiles(variant)
+  end
+
+  test "adds unrelated modules without changing existing edges" do
+    program = ProgramFacts.generate!(policy: :single_call, seed: 45)
+    variant = ProgramFacts.Transform.apply!(program, :add_unrelated_module)
+
+    assert length(variant.files) == length(program.files) + 1
+    assert length(variant.facts.modules) == length(program.facts.modules) + 1
+    assert variant.facts.call_edges == program.facts.call_edges
+    assert_compiles(variant)
   end
 
   test "saves replayable corpus entries" do

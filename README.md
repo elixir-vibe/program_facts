@@ -70,6 +70,16 @@ Write a generated Mix project to a temporary directory. The project includes a `
   )
 ```
 
+Apply fact-aware transformations:
+
+```elixir
+variant =
+  program
+  |> ProgramFacts.Transform.apply!([:rename_variables, :add_dead_pure_statement])
+
+variant.metadata.transforms
+```
+
 Save a replayable corpus entry:
 
 ```elixir
