@@ -13,5 +13,8 @@ defmodule ProgramFacts.Program do
 
   defstruct [:id, :seed, :files, :facts, :metadata]
 
+  @doc """
+  Projects this program into its semantic summary model.
+  """
   def model(%__MODULE__{} = program), do: ProgramFacts.Model.from_program(program)
 end

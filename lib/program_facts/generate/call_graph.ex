@@ -1,8 +1,8 @@
 defmodule ProgramFacts.Generate.CallGraph do
   @moduledoc false
 
-  alias ProgramFacts.{Facts, Naming, Program}
   alias ProgramFacts.Generate.Helpers
+  alias ProgramFacts.Naming
   alias ProgramFacts.Render.Elixir, as: Render
 
   def single_call(opts), do: linear_call_chain(Keyword.put(opts, :depth, 2), :single_call)
@@ -22,19 +22,18 @@ defmodule ProgramFacts.Generate.CallGraph do
         Render.chain_module(module, Enum.at(modules, index + 1))
       end)
 
-    %Program{
+    Helpers.model(
       id: Helpers.id(seed, policy),
       seed: seed,
+      policy: policy,
       files: files,
-      facts: %Facts{
-        modules: modules,
-        functions: functions,
-        call_edges: Helpers.pairwise_edges(functions),
-        call_paths: [functions],
-        features: MapSet.new([:remote_call, policy])
-      },
+      modules: modules,
+      functions: functions,
+      call_edges: Helpers.pairwise_edges(functions),
+      call_paths: [functions],
+      features: MapSet.new([:remote_call, policy]),
       metadata: %{policy: policy, depth: depth}
-    }
+    )
   end
 
   def branching_call_graph(opts) do
@@ -49,19 +48,18 @@ defmodule ProgramFacts.Generate.CallGraph do
       | Enum.map(branch_modules, &Render.chain_module(&1, nil))
     ]
 
-    %Program{
+    Helpers.model(
       id: Helpers.id(seed, :branching_call_graph),
       seed: seed,
+      policy: :branching_call_graph,
       files: files,
-      facts: %Facts{
-        modules: [entry_module | branch_modules],
-        functions: [entry | branches],
-        call_edges: Enum.map(branches, &{entry, &1}),
-        call_paths: Enum.map(branches, &[entry, &1]),
-        features: MapSet.new([:remote_call, :branching_call_graph, :fan_out])
-      },
+      modules: [entry_module | branch_modules],
+      functions: [entry | branches],
+      call_edges: Enum.map(branches, &{entry, &1}),
+      call_paths: Enum.map(branches, &[entry, &1]),
+      features: MapSet.new([:remote_call, :branching_call_graph, :fan_out]),
       metadata: %{policy: :branching_call_graph, width: width}
-    }
+    )
   end
 
   def module_cycle(opts) do
@@ -79,19 +77,18 @@ defmodule ProgramFacts.Generate.CallGraph do
         Render.chain_module(module, Enum.at(cycle_modules, index + 1))
       end)
 
-    %Program{
+    Helpers.model(
       id: Helpers.id(seed, :module_cycle),
       seed: seed,
+      policy: :module_cycle,
       files: files,
-      facts: %Facts{
-        modules: modules,
-        functions: functions,
-        call_edges: Helpers.pairwise_edges(cycle_functions),
-        call_paths: [cycle_functions],
-        architecture: %{cycles: [functions]},
-        features: MapSet.new([:remote_call, :module_cycle])
-      },
+      modules: modules,
+      functions: functions,
+      call_edges: Helpers.pairwise_edges(cycle_functions),
+      call_paths: [cycle_functions],
+      architecture: %{cycles: [functions]},
+      features: MapSet.new([:remote_call, :module_cycle]),
       metadata: %{policy: :module_cycle, depth: depth}
-    }
+    )
   end
 end

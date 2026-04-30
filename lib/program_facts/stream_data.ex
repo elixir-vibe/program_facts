@@ -9,7 +9,12 @@ defmodule ProgramFacts.StreamData do
   @doc """
   Returns a StreamData generator that emits `ProgramFacts.Program` structs.
   """
-  def program(opts \\ []) do
+  def program, do: program([])
+
+  @doc """
+  Returns a StreamData generator that emits `ProgramFacts.Program` structs.
+  """
+  def program(opts) do
     stream_data!()
 
     opts
@@ -23,10 +28,20 @@ defmodule ProgramFacts.StreamData do
   defp generator_options(opts) do
     %{
       policies: Keyword.get(opts, :policies, ProgramFacts.policies()),
-      seed_range: Keyword.get(opts, :min_seed, 1)..Keyword.get(opts, :max_seed, 1_000),
-      depth_range: Keyword.get(opts, :min_depth, 2)..Keyword.get(opts, :max_depth, 8),
-      width_range: Keyword.get(opts, :min_width, 2)..Keyword.get(opts, :max_width, 6)
+      seed_range: range_option(opts, :seed_range, :min_seed, :max_seed, 1..1_000),
+      depth_range: range_option(opts, :depth_range, :min_depth, :max_depth, 2..8),
+      width_range: range_option(opts, :width_range, :min_width, :max_width, 2..6)
     }
+  end
+
+  defp range_option(opts, range_key, min_key, max_key, default) do
+    case Keyword.fetch(opts, range_key) do
+      {:ok, %Range{} = range} ->
+        range
+
+      :error ->
+        Keyword.get(opts, min_key, default.first)..Keyword.get(opts, max_key, default.last)
+    end
   end
 
   defp options_generator(opts) do

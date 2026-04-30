@@ -365,6 +365,36 @@ defmodule ProgramFacts.Render.Elixir do
     file(module, source)
   end
 
+  def gen_server_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      use GenServer
+
+      def start_link(initial) do
+        GenServer.start_link(__MODULE__, initial, [])
+      end
+
+      @impl true
+      def init(initial) do
+        {:ok, %{value: initial}}
+      end
+
+      @impl true
+      def handle_call(:value, _from, state) do
+        {:reply, state.value, state}
+      end
+
+      @impl true
+      def handle_info({:set, value}, state) do
+        send(self(), :updated)
+        {:noreply, %{state | value: value}}
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
   def mixed_effect_module(module) do
     source = """
     defmodule #{inspect(module)} do
@@ -411,6 +441,103 @@ defmodule ProgramFacts.Render.Elixir do
     defmodule #{inspect(module)} do
       def write(value) do
         Process.put(:program_facts_value, value)
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  def guard_clause_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) when is_integer(input) do
+        input + 1
+      end
+
+      def entry(input) do
+        input
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  def try_rescue_after_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        try do
+          if input == :raise, do: raise("program facts"), else: input
+        rescue
+          RuntimeError -> :rescued
+        after
+          :ok
+        end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  def receive_message_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        send(self(), {:program_facts, input})
+
+        receive do
+          {:program_facts, value} -> value
+        after
+          0 -> :timeout
+        end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  def comprehension_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input) do
+        for value <- input, rem(value, 2) == 0 do
+          value * 2
+        end
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  def struct_update_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      defstruct [:value]
+
+      def new(input) do
+        %__MODULE__{value: input}
+      end
+
+      def entry(input) do
+        value = new(input)
+        %{value | value: value.value + 1}
+      end
+    end
+    """
+
+    file(module, source)
+  end
+
+  def default_arguments_module(module) do
+    source = """
+    defmodule #{inspect(module)} do
+      def entry(input, suffix \\\\ :default) do
+        {input, suffix}
       end
     end
     """

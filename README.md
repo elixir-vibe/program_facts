@@ -4,14 +4,16 @@
 [![HexDocs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/program_facts)
 [![License](https://img.shields.io/hexpm/l/program_facts.svg)](LICENSE)
 
-ProgramFacts generates valid Elixir projects with known structural facts.
+ProgramFacts generates valid Elixir projects with **ground-truth static-analysis facts**.
 
-Use it to test analyzers, refactoring tools, code-intelligence systems, compilers, and graph builders against programs whose expected behavior is known before the tool runs.
+Use it to test analyzers, refactoring tools, code-intelligence systems, compilers, and graph builders against programs whose expected structure is known before the tool runs.
+
+In this project, a “program fact” means a machine-checkable statement about source code: “module A exists”, “function A.entry/1 calls B.sink/1”, “parameter input reaches this call argument”, “this function performs IO”, or “this generated architecture policy is violated”.
 
 Instead of generating arbitrary Elixir strings, ProgramFacts creates small deterministic programs from semantic templates and returns both:
 
 1. source files, and
-2. ground-truth facts about the generated program.
+2. oracle facts about the generated program.
 
 Those facts include modules, functions, call edges, call paths, data flow, effects, branches, source locations, architecture-policy fixtures, project layouts, and replay metadata.
 
@@ -22,7 +24,7 @@ Analyzer tests often have two weak options:
 - handwritten fixtures, which are accurate but small and repetitive
 - random source generation, which finds parser bugs but rarely has useful expected facts
 
-ProgramFacts sits between those approaches. It generates source code procedurally, but every generated program carries a manifest of expected structural facts.
+ProgramFacts sits between those approaches. It generates source code procedurally, but every generated program carries a manifest of expected static-analysis facts. The manifest is the oracle: analyzers should rediscover the same facts from the generated source.
 
 That makes it useful for tests like:
 
@@ -32,12 +34,85 @@ That makes it useful for tests like:
 - “does my project scanner include umbrella/package-style sources and exclude `deps/` / `_build/`?”
 - “does my architecture checker report the expected forbidden dependency?”
 
+## From oracle facts to fuzzy testing
+
+A normal fuzzer can generate random source and ask only “did the analyzer crash?”. That is useful, but it does not tell you whether the analyzer’s answer is correct.
+
+ProgramFacts generates **known-answer programs**. Each generated program comes with source plus oracle facts:
+
+```text
+semantic model -> source files -> ground-truth facts
+```
+
+So a property test can repeatedly generate valid programs, run an analyzer, and compare the analyzer result to the oracle facts that came with the program:
+
+```elixir
+property "analyzer finds generated call edges" do
+  check all program <- ProgramFacts.StreamData.program(policies: [:single_call, :linear_call_chain]) do
+    {:ok, dir, program} = ProgramFacts.Project.write_tmp!(program)
+
+    try do
+      actual_edges = MyAnalyzer.call_edges(dir) |> MapSet.new()
+      expected_edges = program.facts.call_edges |> MapSet.new()
+
+      assert MapSet.subset?(expected_edges, actual_edges)
+    after
+      File.rm_rf!(dir)
+    end
+  end
+end
+```
+
+If seed `347` fails, the failure is reproducible because the generator is deterministic:
+
+```elixir
+ProgramFacts.generate!(policy: :linear_call_chain, seed: 347, depth: 4)
+```
+
+Then the shrinker can reduce the failing case by trying smaller generation options, shorter transform sequences, and removable unrelated modules/files.
+
+## What is a program fact?
+
+The term “fact” is common in static analysis and Datalog-style tooling: analyzers often extract relations such as `function/1`, `call/2`, `reads/2`, `writes/2`, or `data_flow/2` before running rules over them.
+
+ProgramFacts uses “program fact” in that sense. A program fact is a machine-checkable structural truth about generated source. For example, this generated code:
+
+```elixir
+defmodule Generated.A do
+  def entry(input), do: Generated.B.sink(input)
+end
+
+defmodule Generated.B do
+  def sink(value), do: value
+end
+```
+
+has facts like:
+
+```elixir
+modules: [Generated.A, Generated.B],
+functions: [
+  {Generated.A, :entry, 1},
+  {Generated.B, :sink, 1}
+],
+call_edges: [
+  {{Generated.A, :entry, 1}, {Generated.B, :sink, 1}}
+],
+call_paths: [
+  [{Generated.A, :entry, 1}, {Generated.B, :sink, 1}]
+]
+```
+
+Analyzers can compare their discovered facts against these expected facts. That turns generated programs into oracle-backed fuzz cases rather than just random parser inputs.
+
+Related terminology you may see elsewhere: static-analysis facts, code facts, Datalog facts, semantic facts, structural facts, ground-truth facts, and oracle facts. ProgramFacts deliberately uses plain JSON-friendly facts so different analyzers can consume the same generated cases.
+
 ## Installation
 
 ```elixir
 def deps do
   [
-    {:program_facts, "~> 0.1", only: [:dev, :test]}
+    {:program_facts, "~> 0.2", only: [:dev, :test]}
   ]
 end
 ```
@@ -47,7 +122,7 @@ end
 ```elixir
 def deps do
   [
-    {:program_facts, "~> 0.1", only: [:dev, :test]},
+    {:program_facts, "~> 0.2", only: [:dev, :test]},
     {:stream_data, "~> 1.1", only: [:dev, :test]}
   ]
 end
@@ -192,6 +267,23 @@ Policies choose the shape of the generated program.
 :mixed_effect_boundary
 ```
 
+### OTP fixtures
+
+```elixir
+:gen_server_callbacks
+```
+
+### Richer Elixir syntax fixtures
+
+```elixir
+:guard_clause
+:try_rescue_after
+:receive_message
+:comprehension
+:struct_update
+:default_arguments
+```
+
 ### Architecture fixtures
 
 ```elixir
@@ -278,6 +370,25 @@ The JSON manifest includes:
 - metadata
 - facts
 
+## Shrinking
+
+ProgramFacts can minimize a generated failure by trying smaller deterministic generation options while a predicate still reproduces the failure:
+
+```elixir
+program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 80, depth: 5)
+
+result =
+  ProgramFacts.shrink(program, fn candidate ->
+    MyAnalyzer.fails?(candidate)
+  end)
+
+result.program
+result.options
+result.steps
+```
+
+The shrinker reduces layout, width, and depth, minimizes transform sequences, then tries structural reductions such as removing unrelated modules/files. Pass `option_shrink: false` to skip regeneration-based option shrinking and focus on transforms/structure. It is deterministic and returns a trace of accepted/rejected shrink steps.
+
 ## Transforms
 
 ProgramFacts includes AST-based transforms for metamorphic testing.
@@ -292,6 +403,9 @@ variant =
   ])
 
 variant.metadata.transforms
+
+ProgramFacts.compare_transform(program, variant)
+ProgramFacts.assert_transform_preserved!(program, variant)
 ```
 
 Available transforms:
@@ -363,23 +477,78 @@ property "generated programs load" do
 end
 ```
 
-## Feedback-directed search
+## Graph adapters
 
-ProgramFacts can run a simple feature-coverage search:
+ProgramFacts keeps manifests as plain JSON-friendly facts, but can expose `libgraph` graphs when the optional dependency is available:
 
 ```elixir
-result = ProgramFacts.Search.run(iterations: 50, seed: 100)
+call_graph = ProgramFacts.Graph.call_graph(program)
+module_graph = ProgramFacts.Graph.module_graph(program)
+
+ProgramFacts.Graph.reachable?(program, source, target)
+ProgramFacts.Graph.path?(program, program.facts.call_paths |> hd())
+ProgramFacts.Graph.cycles(program)
+ProgramFacts.Graph.metrics(program)
+ProgramFacts.Graph.subgraph(program, vertices)
+ProgramFacts.Graph.validate!(program)
+```
+
+Use these helpers when integrating with analyzers such as Reach that already operate on `Graph.t()` values.
+
+## Differential testing
+
+Compare multiple analyzer callbacks or adapter modules against the same generated program:
+
+```elixir
+ProgramFacts.differential(program, [
+  {:source_frontend, &SourceAnalyzer.facts/1},
+  {:beam_frontend, &BeamAnalyzer.facts/1},
+  MyAnalyzerAdapter
+])
+```
+
+Adapter modules implement `ProgramFacts.Analyzer` and return maps, facts, programs, or `ProgramFacts.Analyzer.Result` structs. The result reports whether normalized analyzer facts agree and records pairwise disagreements.
+
+## Feedback-directed search
+
+ProgramFacts can run a feature-coverage or callback-driven search:
+
+```elixir
+result =
+  ProgramFacts.Search.run(
+    iterations: 50,
+    seed: 100,
+    scoring: [:features, :graph_complexity, :cycles, :long_paths],
+    interesting?: fn candidate, state -> candidate.score > state.best_score end
+  )
 
 result.programs
+result.candidates
 result.coverage
 result.features
 ```
 
-This is intentionally small today, but it gives analyzer test suites a starting point for collecting diverse generated programs.
+Built-in scoring modes include `:features`, `:new_features`, `:graph_complexity`, `:cycles`, and `:long_paths`. You can still pass a custom `:score` callback for analyzer-specific scoring. This gives analyzer test suites a starting point for collecting diverse or analyzer-interesting generated programs.
 
-## Semantic model projection
+## Semantic model
 
-Project a generated program into a semantic summary:
+Built-in policies construct a `ProgramFacts.Model` first, then materialize source and facts from that model. Custom generators can use the builder API:
+
+```elixir
+source = {MyApp.A, :entry, 1}
+target = {MyApp.B, :sink, 1}
+
+model =
+  ProgramFacts.Model.builder(id: "custom", seed: 1, policy: :custom)
+  |> ProgramFacts.Model.Builder.add_call(source, target)
+  |> ProgramFacts.Model.Builder.add_call_path([source, target])
+  |> ProgramFacts.Model.Builder.add_feature(:remote_call)
+  |> ProgramFacts.Model.Builder.build()
+
+program = ProgramFacts.Model.to_program(model)
+```
+
+You can also project a generated program back into the semantic summary:
 
 ```elixir
 model = ProgramFacts.model(program)
@@ -403,7 +572,7 @@ model.features
 
 ## Roadmap
 
-See [`ROADMAP.md`](ROADMAP.md) for long-term plans, including model-first generation, richer source-location facts, shrinking/minimization, and more project layouts.
+See [`ROADMAP.md`](ROADMAP.md) for long-term plans, including richer model builder APIs, more renderer backends, shrinking/minimization, Erlang generation, and broader Elixir syntax.
 
 ## License
 

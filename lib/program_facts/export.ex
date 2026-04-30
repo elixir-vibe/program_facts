@@ -7,6 +7,9 @@ defmodule ProgramFacts.Export do
 
   @schema_version 1
 
+  @doc """
+  Converts a generated program, file, or facts struct into JSON-friendly data.
+  """
   def to_map(%Program{} = program) do
     %{
       schema_version: @schema_version,
@@ -35,6 +38,9 @@ defmodule ProgramFacts.Export do
     |> jsonable()
   end
 
+  @doc """
+  Encodes a generated program, file, or facts struct as JSON.
+  """
   def to_json!(value) do
     value
     |> to_map()

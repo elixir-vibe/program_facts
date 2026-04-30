@@ -1,8 +1,8 @@
 defmodule ProgramFacts.Generate.Architecture do
   @moduledoc false
 
-  alias ProgramFacts.{Facts, Naming, Program}
   alias ProgramFacts.Generate.Helpers
+  alias ProgramFacts.Naming
   alias ProgramFacts.Render.Elixir, as: Render
 
   def generate(opts, policy) do
@@ -11,27 +11,26 @@ defmodule ProgramFacts.Generate.Architecture do
     functions = functions(web_module, domain_module, repo_module, policy)
     violation = violation(web_module, domain_module, repo_module, policy)
 
-    %Program{
+    Helpers.model(
       id: Helpers.id(seed, policy),
       seed: seed,
+      policy: policy,
       files:
         files(web_module, domain_module, repo_module, policy) ++
           [Render.architecture_config_file(web_module, domain_module, repo_module, policy)],
-      facts: %Facts{
-        modules: [web_module, domain_module, repo_module],
-        functions: functions,
-        call_edges: edges(functions, policy),
-        call_paths: paths(functions, policy),
-        effects: effects(functions, policy),
-        architecture: %{
-          policy: policy,
-          valid?: violation == nil,
-          violations: List.wrap(violation)
-        },
-        features: MapSet.new([:architecture, policy])
+      modules: [web_module, domain_module, repo_module],
+      functions: functions,
+      call_edges: edges(functions, policy),
+      call_paths: paths(functions, policy),
+      effects: effects(functions, policy),
+      architecture: %{
+        policy: policy,
+        valid?: violation == nil,
+        violations: List.wrap(violation)
       },
+      features: MapSet.new([:architecture, policy]),
       metadata: %{policy: policy, depth: 3}
-    }
+    )
   end
 
   defp architecture_modules(seed, :public_api_boundary_violation) do

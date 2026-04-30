@@ -1,7 +1,7 @@
 defmodule ProgramFacts.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @source_url "https://github.com/elixir-vibe/program_facts"
 
   def project do
@@ -51,6 +51,7 @@ defmodule ProgramFacts.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:libgraph, "~> 0.16", optional: true},
       {:stream_data, "~> 1.1", optional: true}
     ]
   end
@@ -68,7 +69,7 @@ defmodule ProgramFacts.MixProject do
       main: "ProgramFacts",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md", "ROADMAP.md"]
+      extras: ["README.md", "ROADMAP.md", "LICENSE"]
     ]
   end
 end

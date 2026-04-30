@@ -1,6 +1,10 @@
 defmodule ProgramFacts.Generate.Helpers do
   @moduledoc false
 
+  alias ProgramFacts.Model
+
+  def model(attrs), do: Model.new(attrs)
+
   def pairwise_edges(functions) do
     functions
     |> Enum.chunk_every(2, 1, :discard)

@@ -5,6 +5,9 @@ defmodule ProgramFacts.ExUnit do
 
   alias ProgramFacts.Program
 
+  @doc """
+  Compiles generated source and verifies that expected modules are produced.
+  """
   def assert_compiles(%Program{} = program) do
     modules = compile_modules(program)
 
@@ -17,6 +20,9 @@ defmodule ProgramFacts.ExUnit do
     program
   end
 
+  @doc """
+  Encodes and decodes a generated program manifest and validates basic shape.
+  """
   def assert_manifest_round_trip(%Program{} = program) do
     json = ProgramFacts.to_json!(program)
     manifest = JSON.decode!(json)
@@ -32,6 +38,9 @@ defmodule ProgramFacts.ExUnit do
     manifest
   end
 
+  @doc """
+  Writes a temporary Mix project, yields `{dir, program}`, then removes it.
+  """
   def with_tmp_project(%Program{} = program, function) when is_function(function, 2) do
     {:ok, dir, program} = ProgramFacts.Project.write_tmp!(program)
 

@@ -22,8 +22,14 @@ defmodule ProgramFacts.Transform do
   @variable_renames %{input: :arg, value: :item, message: :payload, reason: :cause}
   @preserves_non_structural_facts [:data_flows, :effects, :branches]
 
+  @doc """
+  Returns supported fact-aware transforms.
+  """
   def transforms, do: @transforms
 
+  @doc """
+  Applies one transform or a sequence of transforms to a generated program.
+  """
   def apply!(%Program{} = program, transforms) when is_list(transforms) do
     Enum.reduce(transforms, program, &apply!(&2, &1))
   end
@@ -37,7 +43,8 @@ defmodule ProgramFacts.Transform do
       :functions,
       :call_edges,
       :call_paths,
-      :effects
+      :effects,
+      :branches
     ])
     |> Locations.attach()
   end
@@ -57,36 +64,24 @@ defmodule ProgramFacts.Transform do
   def apply!(%Program{} = program, :add_dead_branch) do
     program
     |> update_files(fn file -> rewrite_source(file, &insert_dead_branch/1) end)
-    |> record_transform(:add_dead_branch, [
-      :modules,
-      :functions,
-      :call_edges,
-      :call_paths | @preserves_non_structural_facts
-    ])
+    |> add_generated_branches(:if, 2, "false")
+    |> record_transform(:add_dead_branch, preserved_except(:branches))
     |> Locations.attach()
   end
 
   def apply!(%Program{} = program, :wrap_in_if_true) do
     program
     |> update_files(fn file -> rewrite_source(file, wrap_bodies(&if_true/1)) end)
-    |> record_transform(:wrap_in_if_true, [
-      :modules,
-      :functions,
-      :call_edges,
-      :call_paths | @preserves_non_structural_facts
-    ])
+    |> add_generated_branches(:if, 2, "true")
+    |> record_transform(:wrap_in_if_true, preserved_except(:branches))
     |> Locations.attach()
   end
 
   def apply!(%Program{} = program, :wrap_in_case_identity) do
     program
     |> update_files(fn file -> rewrite_source(file, wrap_bodies(&case_identity/1)) end)
-    |> record_transform(:wrap_in_case_identity, [
-      :modules,
-      :functions,
-      :call_edges,
-      :call_paths | @preserves_non_structural_facts
-    ])
+    |> add_generated_branches(:case, 1, ":ok")
+    |> record_transform(:wrap_in_case_identity, preserved_except(:branches))
     |> Locations.attach()
   end
 
@@ -398,8 +393,11 @@ defmodule ProgramFacts.Transform do
     |> Map.update!(:call_paths, fn paths -> Enum.reject(paths, &Enum.any?(&1, helper?)) end)
   end
 
-  defp rename_fact_variables(facts, mapping),
-    do: update_in(facts.data_flows, &rename_data_flows(&1, mapping))
+  defp rename_fact_variables(facts, mapping) do
+    facts
+    |> update_in([Access.key!(:data_flows)], &rename_data_flows(&1, mapping))
+    |> update_in([Access.key!(:branches)], &rename_branches(&1, mapping))
+  end
 
   defp rename_data_flows(data_flows, mapping) do
     Enum.map(data_flows, fn data_flow ->
@@ -407,6 +405,57 @@ defmodule ProgramFacts.Transform do
         Enum.map(variables, &Map.get(mapping, &1, &1))
       end)
     end)
+  end
+
+  defp rename_branches(branches, mapping), do: Enum.map(branches, &rename_branch(&1, mapping))
+
+  defp rename_branch(branch, mapping) when is_map(branch) do
+    branch
+    |> Map.update(:calls_by_clause, [], &rename_branch_clauses(&1, mapping))
+    |> Map.update(:nested, [], &rename_branches(&1, mapping))
+  end
+
+  defp rename_branch_clauses(clauses, mapping) do
+    Enum.map(clauses, fn clause ->
+      Map.update(clause, :label, nil, &rename_label(&1, mapping))
+    end)
+  end
+
+  defp rename_label(label, mapping) when is_binary(label) do
+    label
+    |> Code.string_to_quoted!()
+    |> rename_variables(mapping).()
+    |> Macro.to_string()
+  rescue
+    SyntaxError -> label
+  end
+
+  defp add_generated_branches(program, kind, clauses, label) do
+    generated_branches =
+      Enum.map(program.facts.functions, fn function ->
+        %{
+          function: function,
+          kind: kind,
+          clauses: clauses,
+          calls_by_clause: [],
+          generated_by: :transform,
+          label: label
+        }
+      end)
+
+    program
+    |> update_in([Access.key!(:facts), Access.key!(:branches)], &(&1 ++ generated_branches))
+    |> update_in([Access.key!(:facts), Access.key!(:features)], &MapSet.put(&1, :branch))
+  end
+
+  defp preserved_except(fact) do
+    [
+      :modules,
+      :functions,
+      :call_edges,
+      :call_paths | @preserves_non_structural_facts
+    ]
+    |> Enum.reject(&(&1 == fact))
   end
 
   defp record_transform(program, transform, preserved_facts) do

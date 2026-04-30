@@ -7,8 +7,14 @@ defmodule ProgramFacts.Layout do
 
   @layouts [:plain, :umbrella, :package_style]
 
+  @doc """
+  Returns supported generated project layouts.
+  """
   def layouts, do: @layouts
 
+  @doc """
+  Rewrites generated file paths and layout metadata for `layout`.
+  """
   def apply(%Program{} = program, layout) when layout in @layouts do
     files = Enum.map(program.files, &apply_to_file(&1, layout))
     included_files = Enum.map(files, & &1.path)

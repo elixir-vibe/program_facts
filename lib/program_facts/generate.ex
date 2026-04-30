@@ -1,8 +1,8 @@
 defmodule ProgramFacts.Generate do
   @moduledoc false
 
-  alias ProgramFacts.Generate.{Architecture, Branch, CallGraph, DataFlow, Effect}
-  alias ProgramFacts.{Layout, Locations, Naming}
+  alias ProgramFacts.Generate.{Architecture, Branch, CallGraph, DataFlow, Effect, Otp, Syntax}
+  alias ProgramFacts.{Layout, Locations, Model, Naming}
 
   @max_seed Naming.max_seed()
   @max_module_count Naming.max_module_count()
@@ -33,6 +33,13 @@ defmodule ProgramFacts.Generate do
     :read_effect,
     :write_effect,
     :mixed_effect_boundary,
+    :gen_server_callbacks,
+    :guard_clause,
+    :try_rescue_after,
+    :receive_message,
+    :comprehension,
+    :struct_update,
+    :default_arguments,
     :layered_valid,
     :forbidden_dependency,
     :layer_cycle,
@@ -66,6 +73,7 @@ defmodule ProgramFacts.Generate do
 
     opts[:policy]
     |> generate_policy!(opts)
+    |> Model.to_program()
     |> Layout.apply(opts[:layout])
     |> Locations.attach()
   end
@@ -130,6 +138,13 @@ defmodule ProgramFacts.Generate do
   defp generate_policy!(:read_effect, opts), do: Effect.read_effect(opts)
   defp generate_policy!(:write_effect, opts), do: Effect.write_effect(opts)
   defp generate_policy!(:mixed_effect_boundary, opts), do: Effect.mixed_effect_boundary(opts)
+  defp generate_policy!(:gen_server_callbacks, opts), do: Otp.gen_server_callbacks(opts)
+  defp generate_policy!(:guard_clause, opts), do: Syntax.guard_clause(opts)
+  defp generate_policy!(:try_rescue_after, opts), do: Syntax.try_rescue_after(opts)
+  defp generate_policy!(:receive_message, opts), do: Syntax.receive_message(opts)
+  defp generate_policy!(:comprehension, opts), do: Syntax.comprehension(opts)
+  defp generate_policy!(:struct_update, opts), do: Syntax.struct_update(opts)
+  defp generate_policy!(:default_arguments, opts), do: Syntax.default_arguments(opts)
 
   defp generate_policy!(policy, opts) when policy in @architecture_policies,
     do: Architecture.generate(opts, policy)

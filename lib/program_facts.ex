@@ -7,7 +7,7 @@ defmodule ProgramFacts do
   and data-flow relationships.
   """
 
-  alias ProgramFacts.{Export, Generate, Layout, Transform}
+  alias ProgramFacts.{Differential, Export, Generate, Layout, Metamorphic, Shrink, Transform}
 
   @doc """
   Returns the supported generation policies.
@@ -41,12 +41,43 @@ defmodule ProgramFacts do
       iex> length(program.facts.call_edges)
       1
   """
-  def generate!(opts \\ []), do: Generate.generate!(opts)
+  def generate!, do: Generate.generate!([])
+
+  @doc """
+  Generates a program with source files and expected facts.
+  """
+  def generate!(opts), do: Generate.generate!(opts)
 
   @doc """
   Projects a generated program into its semantic summary model.
   """
   def model(program), do: ProgramFacts.Model.from_program(program)
+
+  @doc """
+  Shrinks a failing generated program while `failure?` continues to return true.
+  """
+  def shrink(program, failure?), do: Shrink.shrink(program, failure?, [])
+
+  @doc """
+  Shrinks a failing generated program while `failure?` continues to return true.
+  """
+  def shrink(program, failure?, opts), do: Shrink.shrink(program, failure?, opts)
+
+  @doc """
+  Compares transform invariant claims between an original and transformed program.
+  """
+  def compare_transform(original, transformed), do: Metamorphic.compare(original, transformed)
+
+  @doc """
+  Raises if a transform changed a fact it claimed to preserve.
+  """
+  def assert_transform_preserved!(original, transformed),
+    do: Metamorphic.assert_preserved!(original, transformed)
+
+  @doc """
+  Runs multiple analyzer callbacks against a generated program and compares outputs.
+  """
+  def differential(program, analyzers), do: Differential.compare(program, analyzers)
 
   @doc """
   Converts a generated program, file, or facts struct into a JSON-friendly map.

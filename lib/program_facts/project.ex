@@ -5,6 +5,9 @@ defmodule ProgramFacts.Project do
 
   alias ProgramFacts.Program
 
+  @doc """
+  Writes a generated program or generated options to a temporary Mix project.
+  """
   def write_tmp!(%Program{} = program) do
     write_tmp!(program, [])
   end
@@ -14,6 +17,9 @@ defmodule ProgramFacts.Project do
     write_tmp!(program, opts)
   end
 
+  @doc """
+  Writes a generated program to a temporary Mix project using `opts`.
+  """
   def write_tmp!(%Program{} = program, opts) do
     root = Keyword.get(opts, :root, System.tmp_dir!())
     dir = Path.join(root, program.id <> "_" <> unique_suffix())
@@ -23,13 +29,31 @@ defmodule ProgramFacts.Project do
     {:ok, dir, program}
   end
 
-  def write!(dir, %Program{} = program, opts \\ []) do
-    prepare_dir!(dir, opts)
-    File.write!(Path.join(dir, "mix.exs"), mix_project_source(program))
-    File.write!(Path.join(dir, "program_facts.json"), ProgramFacts.to_json!(program))
-    write_excluded_files!(dir, program)
-    write_source_files!(dir, program.files)
-    dir
+  @doc """
+  Writes `program` to `dir` as a Mix project.
+
+  By default the target directory must be empty. Pass `force: true` to replace
+  it. Source paths are checked so arbitrary program structs cannot write outside
+  the target directory.
+  """
+  def write!(dir, %Program{} = program), do: write!(dir, program, [])
+
+  @doc """
+  Writes `program` to `dir` as a Mix project.
+
+  By default the target directory must be empty. Pass `force: true` to replace
+  it. Source paths are checked so arbitrary program structs cannot write outside
+  the target directory.
+  """
+  def write!(dir, %Program{} = program, opts) do
+    root = Path.expand(dir)
+
+    prepare_dir!(root, opts)
+    File.write!(Path.join(root, "mix.exs"), mix_project_source(program))
+    File.write!(Path.join(root, "program_facts.json"), ProgramFacts.to_json!(program))
+    write_excluded_files!(root, program)
+    write_source_files!(root, program.files)
+    root
   end
 
   defp prepare_dir!(dir, opts) do
@@ -52,7 +76,7 @@ defmodule ProgramFacts.Project do
 
   defp write_source_files!(dir, files) do
     Enum.each(files, fn file ->
-      path = Path.join(dir, file.path)
+      path = safe_join!(dir, file.path)
       File.mkdir_p!(Path.dirname(path))
       File.write!(path, file.source)
     end)
@@ -63,10 +87,25 @@ defmodule ProgramFacts.Project do
     |> get_in([:project_layout, :excluded_files])
     |> List.wrap()
     |> Enum.each(fn relative_path ->
-      path = Path.join(dir, relative_path)
+      path = safe_join!(dir, relative_path)
       File.mkdir_p!(Path.dirname(path))
       File.write!(path, excluded_source())
     end)
+  end
+
+  defp safe_join!(root, relative_path) do
+    if Path.type(relative_path) == :absolute do
+      raise ArgumentError, "file path escapes project root: #{relative_path}"
+    end
+
+    root = Path.expand(root)
+    path = Path.expand(Path.join(root, relative_path))
+
+    unless String.starts_with?(path, root <> "/") do
+      raise ArgumentError, "file path escapes project root: #{relative_path}"
+    end
+
+    path
   end
 
   defp excluded_source do

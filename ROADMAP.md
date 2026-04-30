@@ -1,15 +1,17 @@
 # ProgramFacts Roadmap
 
-ProgramFacts generates Elixir projects with known structural facts for testing analyzers, refactoring tools, compilers, and code intelligence systems.
+ProgramFacts generates Elixir projects with ground-truth static-analysis facts for testing analyzers, refactoring tools, compilers, and code intelligence systems.
 
-The package should not merely generate syntactically valid Elixir. It should generate source code plus ground truth: modules, functions, call edges, call paths, data-flow facts, effect facts, architecture facts, project layout facts, and source locations where practical.
+In this roadmap, “program facts” means machine-checkable facts about source code: modules, functions, call edges, call paths, data-flow facts, effect facts, branch facts, architecture facts, project layout facts, and source locations where practical. These are oracle facts: analyzers should rediscover them from the generated source.
+
+The package should not merely generate syntactically valid Elixir. It should generate source code plus ground truth.
 
 ## Principles
 
 - Generate from a semantic model, not random strings.
 - Keep generated programs valid by construction.
 - Make every generated program reproducible with a seed.
-- Return both source files and expected facts.
+- Return both source files and expected oracle facts.
 - Keep Reach-specific assertions outside this package.
 - Start with a small Elixir subset and expand only when tests need it.
 
@@ -25,9 +27,16 @@ Completed package-side work through the original roadmap, excluding Reach integr
 - Phase 5: complete for package-side architecture fixtures.
 - Phase 6: complete for Elixir layouts; Erlang layouts remain future work.
 - Phase 7: complete for the planned initial transform set.
-- Phase 8: initial feedback-directed feature search implemented.
-- Phase 9: initial corpus persistence and manifest loading implemented.
-- Reach integration: intentionally not started.
+- Phase 8: feedback-directed feature search implemented with scoring/interesting callbacks.
+- Phase 9: corpus persistence, manifest loading, failure promotion, and replay helpers implemented.
+- Phase 10: model-first generation implemented for built-in policies; policy modules build `ProgramFacts.Model` values and `ProgramFacts.Model.to_program/1` derives `ProgramFacts.Facts`.
+- Graph adapter: optional `libgraph` integration implemented through `ProgramFacts.Graph` for call graphs, module graphs, path validation, reachability, cycle checks, graph metrics, and subgraph extraction.
+- Phase 11: option shrinker, transform-sequence minimization, and initial structural module/file minimization implemented.
+- Phase 12: analyzer feedback callbacks and graph-backed scoring modes implemented.
+- Phase 13: transform invariant comparison implemented.
+- Phase 14: OTP/GenServer plus initial richer Elixir syntax fixtures implemented.
+- Phase 15: differential analyzer callback comparison and adapter/result normalization implemented.
+- Reach integration: implemented in Reach test/dev validation.
 
 ## Public API
 
@@ -287,11 +296,110 @@ lib/generated/...
 
 `program_facts.json` includes `schema_version`, `program_facts_version`, policy, layout, files, metadata, and facts.
 
+## Fuzzing roadmap
+
+The initial motivation was fuzz/property testing for Reach and other Elixir analyzers. Research into Csmith, YARPGen, QuickChick, FuzzChick, EMI/Orion, NAUTILUS, Gramatron, GRIMOIRE, GLADE, Athena, and Hermes led to one core decision: analyzer tests need generated programs with known facts, not arbitrary random strings.
+
+ProgramFacts is therefore a structural-oracle generator first, and a fuzzing engine second. The next phases move it closer to mature fuzzing workflows while preserving source-plus-ground-truth-facts as the core value.
+
+### Phase 10 — model-first generation
+
+Goal: move from policy templates that project into a model toward a semantic model as the source of truth.
+
+Tasks:
+
+- Add explicit model builders for modules, functions, calls, data flows, effects, branches, and architecture facts.
+- Render source from the model.
+- Derive facts from the model rather than maintaining source/facts by hand.
+- Keep policy generators as model constructors.
+- Support multiple renderers from the same model over time.
+
+### Phase 11 — shrinking and minimization
+
+Goal: make generated failures easy to reduce.
+
+Tasks:
+
+- Add `ProgramFacts.Shrink`.
+- Reduce `depth` and `width` while a failure predicate still fails.
+- Try simpler layouts.
+- Remove unrelated modules/files while preserving the failure.
+- Minimize transform sequences.
+- Return a replayable minimized program and shrink trace.
+
+### Phase 12 — analyzer feedback loop
+
+Goal: support feedback-directed generation instead of only feature coverage.
+
+Tasks:
+
+- Extend `ProgramFacts.Search.run/1` with `:score`, `:interesting?`, and `:on_candidate` callbacks.
+- Track crashes, mismatches, new analyzer coverage, slow cases, and feature novelty.
+- Keep corpus-worthy programs automatically.
+- Support deterministic replay of interesting seeds.
+
+### Phase 13 — metamorphic properties
+
+Goal: make transforms testable as equivalence/near-equivalence claims.
+
+Tasks:
+
+- Add transform invariant metadata.
+- Record which facts should be preserved and which facts may change.
+- Provide helpers to compare original/transformed facts.
+- Support EMI-style equivalent variants such as wrapping in `if true`, identity cases, alias rewrites, helper extraction/inlining, and independent assignment reordering.
+
+### Phase 14 — richer Elixir subset
+
+Goal: broaden generated Elixir while keeping known facts.
+
+Tasks:
+
+- Add guards.
+- Add `try/rescue/after`.
+- Add `receive`.
+- Add comprehensions.
+- Add protocols.
+- Add structs and nested updates.
+- Add default arguments.
+- Add alias/import/require combinations.
+- Add macro-generated functions.
+- Add OTP/GenServer modules.
+- Add Phoenix/Ecto-style DSL fixtures.
+- Add Erlang source layouts.
+
+### Phase 15 — differential testing
+
+Goal: compare analyzers or analyzer versions.
+
+Tasks:
+
+- Compare Reach source frontend vs BEAM frontend.
+- Compare current Reach vs previous release.
+- Compare canonical CLI JSON vs internal APIs.
+- Allow users to register multiple analyzer adapters.
+- Save disagreement repros to corpus.
+
+### Phase 16 — corpus promotion
+
+Goal: turn generated failures into stable regression fixtures.
+
+Tasks:
+
+- Promote minimized failures into named corpus entries.
+- Store failure metadata, analyzer command, expected mismatch, and minimized seed/options.
+- Add replay helpers that run analyzers against saved corpus entries.
+- Support CI-friendly corpus subsets.
+
 ## Remaining work
 
-- Reach integration tests.
-- Full semantic-model-first generation rather than policy templates projected into `ProgramFacts.Model`.
-- Splitting `ProgramFacts.Generate` into smaller policy/render modules.
+- Keep expanding Reach integration coverage as ProgramFacts grows.
+- Keep enriching model-first generation with more renderer backends.
+- Expand `ProgramFacts.Graph` for analyzer differential comparisons.
+- More powerful shrinking/minimization: remove branches/edges and use source-aware structural reductions beyond isolated modules.
 - Erlang source layout generation.
-- Richer source locations for calls, assignments, branches, and clauses.
-- Shrinking/minimization for generated failures.
+- Broader Elixir syntax: protocols, macros, richer alias/import/require combinations, Phoenix/Ecto-style DSL fixtures, and deeper variants of guards, try/rescue/after, receive, comprehensions, structs, and default args.
+- Richer source locations for nested/generated constructs and macro-expanded code.
+- Analyzer coverage-guided search adapters.
+- Richer metamorphic transform invariant specifications.
+- Differential testing adapters for real analyzers and version comparisons, built on `ProgramFacts.Analyzer`.

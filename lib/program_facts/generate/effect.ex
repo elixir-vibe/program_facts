@@ -1,8 +1,8 @@
 defmodule ProgramFacts.Generate.Effect do
   @moduledoc false
 
-  alias ProgramFacts.{Facts, Naming, Program}
   alias ProgramFacts.Generate.Helpers
+  alias ProgramFacts.Naming
   alias ProgramFacts.Render.Elixir, as: Render
 
   def pure(opts), do: single_effect(opts, :pure)
@@ -16,19 +16,19 @@ defmodule ProgramFacts.Generate.Effect do
     seed = opts[:seed]
     [module] = Naming.modules(seed, 1)
     mfa = {module, effect_function(effect), effect_arity(effect)}
+    policy = effect_policy(effect)
 
-    %Program{
-      id: Helpers.id(seed, effect_policy(effect)),
+    Helpers.model(
+      id: Helpers.id(seed, policy),
       seed: seed,
+      policy: policy,
       files: [Render.effect_module(module, effect)],
-      facts: %Facts{
-        modules: [module],
-        functions: [mfa],
-        effects: [{mfa, effect}],
-        features: MapSet.new([:effect, effect])
-      },
-      metadata: %{policy: effect_policy(effect), effect: effect}
-    }
+      modules: [module],
+      functions: [mfa],
+      effects: [{mfa, effect}],
+      features: MapSet.new([:effect, effect]),
+      metadata: %{policy: policy, effect: effect}
+    )
   end
 
   def mixed_effect_boundary(opts) do
@@ -36,18 +36,17 @@ defmodule ProgramFacts.Generate.Effect do
     [module] = Naming.modules(seed, 1)
     function = {module, :boundary, 2}
 
-    %Program{
+    Helpers.model(
       id: Helpers.id(seed, :mixed_effect_boundary),
       seed: seed,
+      policy: :mixed_effect_boundary,
       files: [Render.mixed_effect_module(module)],
-      facts: %Facts{
-        modules: [module],
-        functions: [function],
-        effects: [{function, :io}, {function, :send}],
-        features: MapSet.new([:effect, :io, :send, :mixed_effect_boundary])
-      },
+      modules: [module],
+      functions: [function],
+      effects: [{function, :io}, {function, :send}],
+      features: MapSet.new([:effect, :io, :send, :mixed_effect_boundary]),
       metadata: %{policy: :mixed_effect_boundary, effects: [:io, :send]}
-    }
+    )
   end
 
   defp effect_policy(:pure), do: :pure

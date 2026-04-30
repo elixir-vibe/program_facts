@@ -1,6 +1,9 @@
 defmodule ProgramFactsTest do
   use ExUnit.Case
+  use ExUnitProperties
   doctest ProgramFacts
+
+  alias ProgramFacts.Model.Builder
 
   test "lists supported layouts" do
     assert ProgramFacts.layouts() == [:plain, :umbrella, :package_style]
@@ -49,6 +52,13 @@ defmodule ProgramFactsTest do
              :read_effect,
              :write_effect,
              :mixed_effect_boundary,
+             :gen_server_callbacks,
+             :guard_clause,
+             :try_rescue_after,
+             :receive_message,
+             :comprehension,
+             :struct_update,
+             :default_arguments,
              :layered_valid,
              :forbidden_dependency,
              :layer_cycle,
@@ -69,8 +79,86 @@ defmodule ProgramFactsTest do
     model = ProgramFacts.model(program)
 
     assert model.id == program.id
+    assert model.seed == program.seed
     assert model.policy == :linear_call_chain
+    assert model.files == program.files
     assert model.relationships.call_edges == program.facts.call_edges
+  end
+
+  test "builds libgraph-compatible graph adapters" do
+    program = ProgramFacts.generate!(policy: :module_cycle, seed: 10, depth: 3)
+    [path] = program.facts.call_paths
+    [source, target | _rest] = path
+
+    call_graph = ProgramFacts.Graph.call_graph(program)
+    module_graph = ProgramFacts.Graph.module_graph(program)
+
+    assert Graph.num_vertices(call_graph) == length(program.facts.functions)
+    assert Graph.num_edges(call_graph) == length(program.facts.call_edges)
+    assert Graph.num_vertices(module_graph) == length(program.facts.modules)
+    assert ProgramFacts.Graph.reachable?(program, source, target)
+    assert ProgramFacts.Graph.path?(program, path)
+    assert ProgramFacts.Graph.cycles(program) != []
+    assert ProgramFacts.Graph.validate!(program) == program
+
+    assert %{
+             vertices: 3,
+             edges: 3,
+             modules: 3,
+             cycles: 1,
+             cyclic?: true,
+             longest_declared_call_path: 4
+           } = ProgramFacts.Graph.metrics(program)
+
+    assert Graph.num_vertices(ProgramFacts.Graph.subgraph(program, [source, target])) == 2
+  end
+
+  test "graph validation rejects impossible paths" do
+    program = ProgramFacts.generate!(policy: :single_call, seed: 11)
+    [source, target] = program.facts.functions
+
+    broken = put_in(program.facts.call_paths, [[target, source]])
+
+    assert_raise ArgumentError, ~r/declared call path/, fn ->
+      ProgramFacts.Graph.validate!(broken)
+    end
+  end
+
+  test "builds custom semantic models with the builder API" do
+    source = {Generated.ProgramFacts.Custom.A, :entry, 1}
+    target = {Generated.ProgramFacts.Custom.B, :sink, 1}
+
+    model =
+      ProgramFacts.Model.builder(id: "custom", seed: 1, policy: :custom)
+      |> Builder.add_call(source, target)
+      |> Builder.add_call_path([source, target])
+      |> Builder.add_effect(target, :io)
+      |> Builder.add_branch(%{function: source, kind: :if, clauses: 2})
+      |> Builder.add_features([:custom, :remote_call])
+      |> Builder.build()
+
+    program = ProgramFacts.Model.to_program(model)
+
+    assert Enum.sort(program.facts.modules) ==
+             Enum.sort([Generated.ProgramFacts.Custom.A, Generated.ProgramFacts.Custom.B])
+
+    assert {source, target} in program.facts.call_edges
+    assert [source, target] in program.facts.call_paths
+    assert {target, :io} in program.facts.effects
+    assert [%{function: ^source, kind: :if, clauses: 2}] = program.facts.branches
+  end
+
+  test "materializes facts from semantic models" do
+    program = ProgramFacts.generate!(policy: :case_clauses, seed: 10)
+    model = ProgramFacts.model(program)
+    rematerialized = ProgramFacts.Model.to_program(model)
+
+    assert rematerialized.files == program.files
+    assert rematerialized.facts.modules == program.facts.modules
+    assert rematerialized.facts.functions == program.facts.functions
+    assert rematerialized.facts.call_edges == program.facts.call_edges
+    assert rematerialized.facts.branches == program.facts.branches
+    assert rematerialized.facts.features == program.facts.features
   end
 
   test "generates a deterministic linear call chain" do
@@ -154,6 +242,10 @@ defmodule ProgramFactsTest do
              Enum.filter(program.facts.locations.functions, &(&1.function == "entry"))
 
     assert is_integer(line)
+    assert Enum.any?(program.facts.locations.calls, &(&1.call =~ ".ok/1"))
+    assert Enum.any?(program.facts.locations.branches, &(&1.kind == :case))
+    assert Enum.any?(program.facts.locations.clauses, &(&1.patterns != []))
+    assert Enum.any?(program.facts.locations.returns, &(&1.function == "entry"))
   end
 
   test "generates effect facts" do
@@ -181,6 +273,34 @@ defmodule ProgramFactsTest do
 
     assert Enum.sort(program.facts.effects) == Enum.sort([{function, :io}, {function, :send}])
     assert MapSet.member?(program.facts.features, :mixed_effect_boundary)
+  end
+
+  test "generates OTP callback facts" do
+    program = ProgramFacts.generate!(policy: :gen_server_callbacks, seed: 18)
+
+    assert Enum.any?(program.files, &(&1.source =~ "use GenServer"))
+
+    assert {_, :handle_call, 3} =
+             Enum.find(program.facts.functions, &(elem(&1, 1) == :handle_call))
+
+    assert MapSet.member?(program.facts.features, :gen_server)
+    assert_compiles(program)
+  end
+
+  test "generates richer Elixir syntax facts" do
+    for policy <- [
+          :guard_clause,
+          :try_rescue_after,
+          :receive_message,
+          :comprehension,
+          :struct_update,
+          :default_arguments
+        ] do
+      program = ProgramFacts.generate!(policy: policy, seed: 19)
+
+      assert MapSet.member?(program.facts.features, policy)
+      assert_compiles(program)
+    end
   end
 
   test "generates architecture policy facts" do
@@ -219,7 +339,7 @@ defmodule ProgramFactsTest do
     map = ProgramFacts.to_map(program)
 
     assert map["schema_version"] == 1
-    assert map["program_facts_version"] == "0.1.0"
+    assert map["program_facts_version"] == "0.2.0"
     assert map["id"] == "pf_39_linear_call_chain"
     assert [%{"path" => _, "source" => _, "kind" => "elixir"}, _] = map["files"]
 
@@ -286,6 +406,34 @@ defmodule ProgramFactsTest do
     end
   end
 
+  test "rejects source paths that escape the project root" do
+    root =
+      Path.join(System.tmp_dir!(), "program_facts_escape_#{System.unique_integer([:positive])}")
+
+    program = %ProgramFacts.Program{
+      id: "escape",
+      seed: 1,
+      files: [
+        %ProgramFacts.File{
+          path: "../escape.ex",
+          source: "defmodule Escape do\nend\n",
+          kind: :elixir
+        }
+      ],
+      facts: %ProgramFacts.Facts{}
+    }
+
+    try do
+      assert_raise ArgumentError, ~r/escapes project root/, fn ->
+        ProgramFacts.Project.write!(root, program, force: true)
+      end
+
+      refute File.exists?(Path.expand(Path.join(root, "../escape.ex")))
+    after
+      File.rm_rf!(root)
+    end
+  end
+
   test "written layout project includes excluded fixtures" do
     {:ok, dir, program} =
       ProgramFacts.Project.write_tmp!(policy: :single_call, seed: 42, layout: :umbrella)
@@ -296,6 +444,39 @@ defmodule ProgramFactsTest do
       end
     after
       File.rm_rf!(dir)
+    end
+  end
+
+  test "rename_variables keeps branch labels in sync with source" do
+    variant =
+      ProgramFacts.generate!(policy: :case_clauses, seed: 16)
+      |> ProgramFacts.Transform.apply!(:rename_variables)
+
+    [branch] = variant.facts.branches
+    labels = Enum.map(branch.calls_by_clause, & &1.label)
+
+    assert hd(variant.files).source =~ "case arg do"
+    assert "{:ok, item}" in labels
+    assert "{:error, cause}" in labels
+    refute Enum.any?(labels, &String.contains?(&1, "value"))
+    refute Enum.any?(labels, &String.contains?(&1, "reason"))
+  end
+
+  test "branch-adding transforms keep semantic branch facts complete" do
+    for {transform, kind} <- [
+          wrap_in_if_true: :if,
+          wrap_in_case_identity: :case,
+          add_dead_branch: :if
+        ] do
+      variant =
+        ProgramFacts.generate!(policy: :single_call, seed: 1)
+        |> ProgramFacts.Transform.apply!(transform)
+
+      assert Enum.any?(variant.facts.branches, fn branch ->
+               branch.kind == kind and branch.generated_by == :transform
+             end)
+
+      assert length(variant.facts.branches) == length(variant.facts.locations.branches)
     end
   end
 
@@ -372,7 +553,153 @@ defmodule ProgramFactsTest do
 
     assert result.coverage.program_count == length(result.programs)
     assert result.coverage.feature_count == MapSet.size(result.features)
+    assert result.coverage.candidate_count == length(result.candidates)
     assert result.coverage.program_count > 0
+  end
+
+  test "search supports graph-backed scoring" do
+    result =
+      ProgramFacts.Search.run(
+        iterations: 3,
+        seed: 90,
+        policies: [:single_call, :module_cycle],
+        scoring: [:features, :graph_complexity, :cycles, :long_paths]
+      )
+
+    assert result.best_score > 0
+    assert Enum.all?(result.candidates, &is_map(&1.graph_metrics))
+    assert Enum.any?(result.candidates, &(&1.graph_metrics.cycles > 0))
+  end
+
+  test "search handles zero iterations and validates empty inputs" do
+    result = ProgramFacts.Search.run(iterations: 0)
+
+    assert result.programs == []
+    assert result.candidates == []
+    assert result.coverage == %{candidate_count: 0, feature_count: 0, program_count: 0}
+
+    assert_raise ArgumentError, ~r/iterations/, fn -> ProgramFacts.Search.run(iterations: -1) end
+    assert_raise ArgumentError, ~r/policies/, fn -> ProgramFacts.Search.run(policies: []) end
+    assert_raise ArgumentError, ~r/layouts/, fn -> ProgramFacts.Search.run(layouts: []) end
+  end
+
+  property "StreamData program supports range options" do
+    check all(
+            program <-
+              ProgramFacts.StreamData.program(
+                policies: [:linear_call_chain],
+                seed_range: 5..5,
+                depth_range: 2..2,
+                width_range: 3..3
+              ),
+            max_runs: 3
+          ) do
+      assert program.seed == 5
+      assert program.metadata.depth in [1, 2]
+    end
+  end
+
+  test "accepts feedback callbacks during search" do
+    parent = self()
+
+    result =
+      ProgramFacts.Search.run(
+        iterations: 3,
+        seed: 70,
+        score: fn program, _state -> length(program.files) end,
+        interesting?: fn candidate, _state -> candidate.score >= 2 end,
+        on_candidate: fn candidate, _state -> send(parent, {:candidate, candidate.program.id}) end
+      )
+
+    assert_receive {:candidate, _id}
+    assert result.best_score >= 2
+  end
+
+  test "shrinks generated programs while a failure predicate holds" do
+    program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 80, depth: 5, width: 4)
+    result = ProgramFacts.shrink(program, &(length(&1.facts.functions) >= 2))
+
+    assert result.options[:depth] <= 2
+    assert length(result.program.facts.functions) == 2
+    assert Enum.any?(result.steps, & &1.accepted?)
+  end
+
+  test "shrinks transform sequences" do
+    program =
+      ProgramFacts.generate!(policy: :single_call, seed: 83)
+      |> ProgramFacts.Transform.apply!([:add_dead_pure_statement, :add_unrelated_module])
+
+    result =
+      ProgramFacts.shrink(
+        program,
+        fn candidate ->
+          candidate.metadata
+          |> Map.get(:transforms, [])
+          |> Enum.any?(&(&1.name == :add_unrelated_module))
+        end,
+        option_shrink: false
+      )
+
+    assert Enum.map(result.program.metadata.transforms, & &1.name) == [:add_unrelated_module]
+    assert Enum.any?(result.steps, &(&1.kind == :remove_transform and &1.accepted?))
+  end
+
+  test "shrinks unrelated modules structurally" do
+    program =
+      ProgramFacts.generate!(policy: :single_call, seed: 81)
+      |> ProgramFacts.Transform.apply!(:add_unrelated_module)
+
+    result =
+      ProgramFacts.shrink(program, &(length(&1.facts.call_edges) == 1), option_shrink: false)
+
+    refute Enum.any?(result.program.facts.functions, fn {_module, function, _arity} ->
+             function == :unrelated
+           end)
+
+    assert length(result.program.files) == 2
+    assert Enum.any?(result.steps, &(&1.kind == :remove_module and &1.accepted?))
+    assert_compiles(result.program)
+  end
+
+  test "compares transform invariant claims" do
+    program = ProgramFacts.generate!(policy: :single_call, seed: 81)
+    transformed = ProgramFacts.Transform.apply!(program, :add_dead_pure_statement)
+
+    assert %{valid?: true} = ProgramFacts.compare_transform(program, transformed)
+    assert ProgramFacts.assert_transform_preserved!(program, transformed) == transformed
+  end
+
+  test "runs differential analyzer callbacks" do
+    program = ProgramFacts.generate!(policy: :single_call, seed: 82)
+
+    result =
+      ProgramFacts.differential(program, [
+        {:a, fn program -> %{functions: length(program.facts.functions)} end},
+        {:b, fn program -> %{functions: length(program.facts.functions)} end}
+      ])
+
+    assert result.agree?
+    assert result.disagreements == []
+    assert Enum.all?(result.results, &match?(%ProgramFacts.Analyzer.Result{}, &1))
+  end
+
+  test "promotes shrink results with replay metadata" do
+    root =
+      Path.join(System.tmp_dir!(), "program_facts_failure_#{System.unique_integer([:positive])}")
+
+    program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 84, depth: 4)
+    shrink = ProgramFacts.shrink(program, &(length(&1.facts.functions) >= 2))
+
+    try do
+      dir = ProgramFacts.Corpus.promote_failure!(shrink, root)
+      failure = dir |> Path.join("failure.json") |> File.read!() |> JSON.decode!()
+
+      assert failure["program_id"] == shrink.program.id
+      assert failure["shrink"]["steps"] != []
+      assert failure["shrink"]["options"]["policy"] == "linear_call_chain"
+    after
+      File.rm_rf!(root)
+    end
   end
 
   test "saves replayable corpus entries" do
