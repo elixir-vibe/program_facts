@@ -2,7 +2,7 @@ defmodule ProgramFacts.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/dannote/program_facts"
+  @source_url "https://github.com/elixir-vibe/program_facts"
 
   def project do
     [
