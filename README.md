@@ -355,7 +355,7 @@ program.facts.locations
 program.facts.features
 ```
 
-JSON export is versioned:
+JSON export is versioned. `to_map/1` returns atom-keyed Elixir data; `to_json!/1` lets the JSON encoder produce JSON object keys.
 
 ```elixir
 ProgramFacts.to_map(program)

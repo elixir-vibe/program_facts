@@ -339,15 +339,16 @@ defmodule ProgramFactsTest do
     program = ProgramFacts.generate!(policy: :linear_call_chain, seed: 39, depth: 2)
     map = ProgramFacts.to_map(program)
 
-    assert map["schema_version"] == 1
-    assert map["program_facts_version"] == "0.2.0"
-    assert map["id"] == "pf_39_linear_call_chain"
-    assert [%{"path" => _, "source" => _, "kind" => "elixir"}, _] = map["files"]
+    assert map.schema_version == 1
+    assert map.program_facts_version == "0.2.0"
+    assert map.id == "pf_39_linear_call_chain"
+    assert [%{path: _, source: _, kind: :elixir}, _] = map.files
 
-    assert [%{"id" => _, "module" => _, "function" => _, "arity" => 1}, _] =
-             map["facts"]["functions"]
+    assert [%{id: _, module: _, function: _, arity: 1}, _] = map.facts.functions
 
-    assert is_binary(ProgramFacts.to_json!(program))
+    json = ProgramFacts.to_json!(program)
+    assert is_binary(json)
+    assert %{"id" => "pf_39_linear_call_chain"} = JSON.decode!(json)
   end
 
   test "writes a temporary Mix project" do
