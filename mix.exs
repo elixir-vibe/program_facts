@@ -61,7 +61,7 @@ defmodule ProgramFacts.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib mix.exs README.md ROADMAP.md LICENSE .formatter.exs .credo.exs)
+      files: ~w(lib mix.exs README.md CHANGELOG.md ROADMAP.md LICENSE .formatter.exs .credo.exs)
     ]
   end
 
@@ -70,7 +70,7 @@ defmodule ProgramFacts.MixProject do
       main: "ProgramFacts",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md", "ROADMAP.md", "LICENSE"]
+      extras: ["README.md", "CHANGELOG.md", "ROADMAP.md", "LICENSE"]
     ]
   end
 end

@@ -36,6 +36,8 @@ Completed package-side work through the original roadmap, excluding Reach integr
 - Phase 13: transform invariant comparison implemented.
 - Phase 14: OTP/GenServer plus initial richer Elixir syntax fixtures implemented.
 - Phase 15: differential analyzer callback comparison and adapter/result normalization implemented.
+- Typed manifest boundary: `%ProgramFacts.Manifest{}`, `%ProgramFacts.Manifest.Facts{}`, `%ProgramFacts.Manifest.File{}`, and `%ProgramFacts.Fact.*{}` payloads implemented with JSON protocol encoding/decoding.
+- Static quality checks: GitHub Actions and `mix ci` include compile warnings-as-errors, format, Credo strict, ExDNA, Dialyzer, ExSlop, and tests.
 - Reach integration: implemented in Reach test/dev validation.
 
 ## Public API

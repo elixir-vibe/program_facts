@@ -17,6 +17,16 @@ Instead of generating arbitrary Elixir strings, ProgramFacts creates small deter
 
 Those facts include modules, functions, call edges, call paths, data flow, effects, branches, source locations, architecture-policy fixtures, project layouts, and replay metadata.
 
+## 0.2.0 highlights
+
+- Typed JSON manifests with `%ProgramFacts.Manifest{}` and `%ProgramFacts.Fact.*{}` payloads.
+- Struct decoding for manifests and corpus failures.
+- Fact conversion contracts via `ProgramFacts.Facts.normalize/1` and `ProgramFacts.Facts.to_manifest/1`.
+- Corpus failure promotion with replay metadata.
+- Analyzer adapters, differential/metamorphic helpers, feedback search, graph metrics, and shrink traces.
+- Broader built-in policies for branches, effects, OTP, richer syntax, architecture fixtures, and project layouts.
+- Strict CI/static checks with Credo, ExDNA, Dialyzer, and ExSlop.
+
 ## Why ProgramFacts?
 
 Analyzer tests often have two weak options:
