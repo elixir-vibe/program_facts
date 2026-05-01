@@ -3,7 +3,7 @@ defmodule ProgramFacts.Manifest do
   JSON manifest for a generated program.
   """
 
-  alias ProgramFacts.{Facts, File, Program}
+  alias ProgramFacts.{Facts, Program}
 
   @schema_version 1
 
@@ -35,8 +35,8 @@ defmodule ProgramFacts.Manifest do
       program_facts_version: package_version(),
       id: program.id,
       seed: program.seed,
-      files: Enum.map(program.files, &file/1),
-      facts: facts(program.facts),
+      files: Enum.map(program.files, &ProgramFacts.Manifest.File.new/1),
+      facts: ProgramFacts.Manifest.Facts.new(program.facts),
       metadata: value(program.metadata)
     }
   end
@@ -85,24 +85,19 @@ defmodule ProgramFacts.Manifest do
   end
 
   def to_map(%Program{} = program), do: program |> new() |> to_map()
-  def to_map(%File{} = file), do: file(file)
-  def to_map(%Facts{} = facts), do: facts(facts)
-  def to_map(%{} = map), do: value(map)
 
-  defp file(%File{} = file) do
-    %{
-      path: file.path,
-      source: file.source,
-      kind: file.kind
-    }
-    |> value()
-  end
+  def to_map(%ProgramFacts.File{} = file),
+    do: file |> ProgramFacts.Manifest.File.new() |> to_map()
 
-  defp facts(%Facts{} = facts) do
-    facts
+  def to_map(%Facts{} = facts), do: facts |> ProgramFacts.Manifest.Facts.new() |> to_map()
+
+  def to_map(%{__struct__: _} = struct) do
+    struct
     |> Map.from_struct()
     |> value()
   end
+
+  def to_map(%{} = map), do: value(map)
 
   defp value(%MapSet{} = set) do
     set
@@ -111,70 +106,13 @@ defmodule ProgramFacts.Manifest do
     |> Enum.map(&value/1)
   end
 
+  defp value(%{__struct__: _} = struct), do: to_map(struct)
+
   defp value(%{} = map) do
     Map.new(map, fn {key, nested} -> {manifest_key(key), value(nested)} end)
   end
 
   defp value(list) when is_list(list), do: Enum.map(list, &value/1)
-
-  defp value({:param, function, name}) do
-    %{
-      type: :param,
-      function: value(function),
-      name: name
-    }
-  end
-
-  defp value({:arg, function, index}) do
-    %{
-      type: :arg,
-      function: value(function),
-      index: index
-    }
-  end
-
-  defp value({:return, function}) do
-    %{
-      type: :return,
-      function: value(function)
-    }
-  end
-
-  defp value({:var, function, name}) do
-    %{
-      type: :var,
-      function: value(function),
-      name: name
-    }
-  end
-
-  defp value(
-         {{source_module, source_function, source_arity},
-          {target_module, target_function, target_arity}}
-       ) do
-    %{
-      source: value({source_module, source_function, source_arity}),
-      target: value({target_module, target_function, target_arity})
-    }
-  end
-
-  defp value({{module, function, arity}, effect})
-       when is_atom(module) and is_atom(function) and is_integer(arity) and is_atom(effect) do
-    %{
-      function: value({module, function, arity}),
-      effect: effect
-    }
-  end
-
-  defp value({module, function, arity})
-       when is_atom(module) and is_atom(function) and is_integer(arity) do
-    %{
-      module: module_name(module),
-      function: Atom.to_string(function),
-      arity: arity,
-      id: "#{module_name(module)}.#{function}/#{arity}"
-    }
-  end
 
   defp value(tuple) when is_tuple(tuple) do
     tuple
