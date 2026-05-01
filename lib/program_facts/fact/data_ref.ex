@@ -33,4 +33,42 @@ defmodule ProgramFacts.Fact.DataRef do
   end
 
   def new(%__MODULE__{} = ref), do: ref
+
+  def from_map!(%{"type" => type, "function" => function} = map) do
+    from_map!(%{
+      type: type,
+      function: function,
+      name: Map.get(map, "name"),
+      index: Map.get(map, "index")
+    })
+  end
+
+  def from_map!(%{type: type, function: function} = map) do
+    %__MODULE__{
+      type: ref_type(type),
+      function: FunctionID.from_map!(function),
+      name: optional_atom(Map.get(map, :name)),
+      index: Map.get(map, :index)
+    }
+  end
+
+  def to_tuple(%__MODULE__{type: :param} = ref),
+    do: {:param, FunctionID.to_tuple(ref.function), ref.name}
+
+  def to_tuple(%__MODULE__{type: :arg} = ref),
+    do: {:arg, FunctionID.to_tuple(ref.function), ref.index}
+
+  def to_tuple(%__MODULE__{type: :return} = ref), do: {:return, FunctionID.to_tuple(ref.function)}
+
+  def to_tuple(%__MODULE__{type: :var} = ref),
+    do: {:var, FunctionID.to_tuple(ref.function), ref.name}
+
+  def to_tuple(tuple) when is_tuple(tuple), do: tuple
+
+  defp ref_type(type) when is_atom(type), do: type
+  defp ref_type(type) when is_binary(type), do: String.to_existing_atom(type)
+
+  defp optional_atom(nil), do: nil
+  defp optional_atom(name) when is_atom(name), do: name
+  defp optional_atom(name) when is_binary(name), do: String.to_atom(name)
 end

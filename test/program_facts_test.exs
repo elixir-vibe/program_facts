@@ -4,6 +4,10 @@ defmodule ProgramFactsTest do
   doctest ProgramFacts
 
   alias ProgramFacts.Corpus.Failure
+  alias ProgramFacts.Fact.{Branch, CallEdge, DataFlow, Effect, FunctionID}
+  alias ProgramFacts.Manifest
+  alias ProgramFacts.Manifest.Facts, as: ManifestFacts
+  alias ProgramFacts.Manifest.File, as: ManifestFile
   alias ProgramFacts.Model.Builder
 
   test "lists supported layouts" do
@@ -67,6 +71,29 @@ defmodule ProgramFactsTest do
              :internal_boundary_violation,
              :allowed_effect_violation
            ]
+  end
+
+  test "all policies round-trip through typed JSON manifests" do
+    ProgramFacts.policies()
+    |> Enum.with_index(1)
+    |> Enum.each(fn {policy, seed} ->
+      program = ProgramFacts.generate!(policy: policy, seed: seed, depth: 3, width: 3)
+      manifest = Manifest.new(program)
+      decoded = program |> ProgramFacts.to_json!() |> Manifest.decode!()
+
+      assert %Manifest{} = manifest
+      assert %Manifest{} = decoded
+      assert %ManifestFile{} = hd(manifest.files)
+      assert %ManifestFacts{} = manifest.facts
+      assert Enum.all?(manifest.facts.functions, &match?(%FunctionID{}, &1))
+      assert Enum.all?(manifest.facts.call_edges, &match?(%CallEdge{}, &1))
+      assert Enum.all?(manifest.facts.data_flows, &match?(%DataFlow{}, &1))
+      assert Enum.all?(manifest.facts.effects, &match?(%Effect{}, &1))
+      assert Enum.all?(manifest.facts.branches, &match?(%Branch{}, &1))
+      assert decoded.id == program.id
+      assert decoded.facts.modules == manifest.facts.modules
+      assert length(decoded.facts.functions) == length(program.facts.functions)
+    end)
   end
 
   test "rejects unbounded seeds and sizes" do

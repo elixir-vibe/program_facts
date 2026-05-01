@@ -362,6 +362,13 @@ ProgramFacts.to_map(program)
 ProgramFacts.to_json!(program)
 ```
 
+The export boundary is typed:
+
+- `%ProgramFacts.Program{}` is the generated source project and mutable oracle model used by generators, transforms, shrinkers, and graph adapters.
+- `%ProgramFacts.Facts{}` keeps core oracle facts tuple/map-compatible for convenient analyzer assertions.
+- `%ProgramFacts.Manifest{}` is the typed JSON/export boundary.
+- `%ProgramFacts.Manifest.Facts{}` and `%ProgramFacts.Fact.*{}` structs represent manifest facts such as function ids, call edges, effects, branches, data-flow refs, and source locations.
+
 The JSON manifest includes:
 
 - `schema_version`

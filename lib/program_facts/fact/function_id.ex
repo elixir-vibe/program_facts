@@ -30,6 +30,25 @@ defmodule ProgramFacts.Fact.FunctionID do
 
   def new(%__MODULE__{} = function), do: function
 
+  def from_map!(%{"module" => module, "function" => function, "arity" => arity}) do
+    from_map!(%{module: module, function: function, arity: arity})
+  end
+
+  def from_map!(%{module: module, function: function, arity: arity}) do
+    %__MODULE__{
+      module: module,
+      function: function,
+      arity: arity,
+      id: "#{module}.#{function}/#{arity}"
+    }
+  end
+
+  def to_tuple(%__MODULE__{} = function) do
+    {Module.concat([function.module]), String.to_atom(function.function), function.arity}
+  end
+
+  def to_tuple(tuple) when is_tuple(tuple), do: tuple
+
   defp module_name(module) do
     module
     |> inspect()

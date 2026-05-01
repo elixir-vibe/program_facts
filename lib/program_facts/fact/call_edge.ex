@@ -16,4 +16,18 @@ defmodule ProgramFacts.Fact.CallEdge do
   def new(source, target) do
     %__MODULE__{source: FunctionID.new(source), target: FunctionID.new(target)}
   end
+
+  def from_map!(%{"source" => source, "target" => target}) do
+    from_map!(%{source: source, target: target})
+  end
+
+  def from_map!(%{source: source, target: target}) do
+    %__MODULE__{source: FunctionID.from_map!(source), target: FunctionID.from_map!(target)}
+  end
+
+  def to_tuple(%__MODULE__{} = edge) do
+    {FunctionID.to_tuple(edge.source), FunctionID.to_tuple(edge.target)}
+  end
+
+  def to_tuple(tuple) when is_tuple(tuple), do: tuple
 end

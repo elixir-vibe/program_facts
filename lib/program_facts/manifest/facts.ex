@@ -32,7 +32,29 @@ defmodule ProgramFacts.Manifest.Facts do
 
   @type t :: %__MODULE__{}
 
-  def new(%Facts{} = facts) do
+  def new(%Facts{} = facts), do: Facts.to_manifest(facts)
+
+  def from_map!(%{} = facts) do
+    facts = ProgramFacts.Manifest.to_map(facts)
+
+    %__MODULE__{
+      modules: Map.fetch!(facts, :modules),
+      functions: Enum.map(Map.fetch!(facts, :functions), &FunctionID.from_map!/1),
+      call_edges: Enum.map(Map.fetch!(facts, :call_edges), &CallEdge.from_map!/1),
+      call_paths:
+        facts
+        |> Map.fetch!(:call_paths)
+        |> Enum.map(&Enum.map(&1, fn function -> FunctionID.from_map!(function) end)),
+      data_flows: Enum.map(Map.fetch!(facts, :data_flows), &DataFlow.from_map!/1),
+      effects: Enum.map(Map.fetch!(facts, :effects), &Effect.from_map!/1),
+      branches: Enum.map(Map.fetch!(facts, :branches), &Branch.from_map!/1),
+      architecture: Map.fetch!(facts, :architecture),
+      locations: Map.fetch!(facts, :locations),
+      features: Enum.map(Map.fetch!(facts, :features), &feature/1)
+    }
+  end
+
+  def build(%Facts{} = facts) do
     %__MODULE__{
       modules: Enum.map(facts.modules, &module_name/1),
       functions: Enum.map(facts.functions, &FunctionID.new/1),
@@ -47,6 +69,9 @@ defmodule ProgramFacts.Manifest.Facts do
       features: facts.features |> MapSet.to_list() |> Enum.sort_by(&to_string/1)
     }
   end
+
+  defp feature(feature) when is_atom(feature), do: feature
+  defp feature(feature) when is_binary(feature), do: String.to_existing_atom(feature)
 
   defp locations(locations) do
     Map.new(locations, fn {category, entries} ->
