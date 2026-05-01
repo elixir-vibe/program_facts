@@ -80,19 +80,23 @@ defmodule ProgramFacts.Corpus do
   end
 
   defp failure_manifest(program, metadata) do
-    metadata = Map.new(metadata)
+    metadata = metadata |> Map.new() |> stringify_keys()
 
     %{
       "program_id" => program.id,
       "metadata" => metadata,
       "program_facts_manifest" => "program_facts.json",
-      "analyzer" => metadata["analyzer"] || metadata[:analyzer],
-      "command" => metadata["command"] || metadata[:command],
-      "mismatch" => metadata["mismatch"] || metadata[:mismatch],
-      "shrink" => metadata["shrink"] || metadata[:shrink]
+      "analyzer" => metadata["analyzer"],
+      "command" => metadata["command"],
+      "mismatch" => metadata["mismatch"],
+      "shrink" => metadata["shrink"]
     }
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
+  end
+
+  defp stringify_keys(map) do
+    Map.new(map, fn {key, value} -> {to_string(key), value} end)
   end
 
   defp shrink_metadata(shrink_result) do
