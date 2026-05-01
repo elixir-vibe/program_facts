@@ -52,6 +52,38 @@ defmodule ProgramFacts.Corpus.Failure do
   end
 
   @doc """
+  Decodes failure metadata JSON into a failure struct.
+  """
+  def decode!(json) when is_binary(json) do
+    json
+    |> JSON.decode!()
+    |> from_map!()
+  end
+
+  @doc """
+  Builds failure metadata from decoded JSON data.
+  """
+  def from_map!(%{"program_id" => _program_id} = map) do
+    map
+    |> ProgramFacts.Manifest.to_map()
+    |> from_map!()
+  end
+
+  def from_map!(%{program_id: program_id} = map) do
+    %__MODULE__{
+      program_id: program_id,
+      program_facts_manifest: Map.get(map, :program_facts_manifest, "program_facts.json"),
+      analyzer: Map.get(map, :analyzer),
+      command: Map.get(map, :command),
+      mismatch: Map.get(map, :mismatch),
+      shrink: Map.get(map, :shrink),
+      metadata: Map.get(map, :metadata, %{})
+    }
+  end
+
+  def from_map!(%__MODULE__{} = failure), do: failure
+
+  @doc """
   Builds failure metadata from a shrink result.
   """
   def from_shrink_result(%{program: %Program{} = program} = shrink_result, attrs \\ []) do

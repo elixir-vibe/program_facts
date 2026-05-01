@@ -348,7 +348,7 @@ defmodule ProgramFactsTest do
 
     json = ProgramFacts.to_json!(program)
     assert is_binary(json)
-    assert %{"id" => "pf_39_linear_call_chain"} = JSON.decode!(json)
+    assert %{id: "pf_39_linear_call_chain"} = ProgramFacts.Manifest.decode!(json)
   end
 
   test "writes a temporary Mix project" do
@@ -542,7 +542,7 @@ defmodule ProgramFactsTest do
     program = ProgramFacts.generate!(policy: :if_else, seed: 46)
 
     assert ProgramFacts.ExUnit.assert_compiles(program) == program
-    assert ProgramFacts.ExUnit.assert_manifest_round_trip(program)["id"] == program.id
+    assert ProgramFacts.ExUnit.assert_manifest_round_trip(program).id == program.id
 
     ProgramFacts.ExUnit.with_tmp_project(program, fn dir, tmp_program ->
       assert tmp_program.id == program.id
@@ -695,11 +695,11 @@ defmodule ProgramFactsTest do
 
     try do
       dir = ProgramFacts.Corpus.promote_failure!(program, root, failure)
-      manifest = dir |> Path.join("failure.json") |> File.read!() |> JSON.decode!()
+      manifest = dir |> Path.join("failure.json") |> File.read!() |> Failure.decode!()
 
-      assert manifest["program_id"] == program.id
-      assert manifest["analyzer"] == "reach"
-      assert manifest["command"] == ["mix", "reach"]
+      assert manifest.program_id == program.id
+      assert manifest.analyzer == "reach"
+      assert manifest.command == ["mix", "reach"]
     after
       File.rm_rf!(root)
     end
@@ -714,11 +714,11 @@ defmodule ProgramFactsTest do
 
     try do
       dir = ProgramFacts.Corpus.promote_failure!(shrink, root)
-      failure = dir |> Path.join("failure.json") |> File.read!() |> JSON.decode!()
+      failure = dir |> Path.join("failure.json") |> File.read!() |> Failure.decode!()
 
-      assert failure["program_id"] == shrink.program.id
-      assert failure["shrink"]["steps"] != []
-      assert failure["shrink"]["options"]["policy"] == "linear_call_chain"
+      assert failure.program_id == shrink.program.id
+      assert failure.shrink.steps != []
+      assert failure.shrink.options.policy == "linear_call_chain"
     after
       File.rm_rf!(root)
     end
@@ -735,11 +735,11 @@ defmodule ProgramFactsTest do
       manifest = ProgramFacts.Corpus.load_manifest!(dir)
 
       assert Path.basename(Path.dirname(dir)) == "case_clauses"
-      assert manifest["id"] == program.id
+      assert manifest.id == program.id
       assert File.exists?(Path.join(dir, hd(program.files).path))
       assert ProgramFacts.Corpus.manifests(root) == [Path.join(dir, "program_facts.json")]
       assert [loaded] = ProgramFacts.Corpus.load_manifests!(root)
-      assert loaded["id"] == program.id
+      assert loaded.id == program.id
     after
       File.rm_rf!(root)
     end

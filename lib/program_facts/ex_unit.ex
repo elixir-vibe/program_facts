@@ -3,7 +3,7 @@ defmodule ProgramFacts.ExUnit do
   Test helpers for generated programs.
   """
 
-  alias ProgramFacts.Program
+  alias ProgramFacts.{Manifest, Program}
 
   @doc """
   Compiles generated source and verifies that expected modules are produced.
@@ -25,12 +25,12 @@ defmodule ProgramFacts.ExUnit do
   """
   def assert_manifest_round_trip(%Program{} = program) do
     json = ProgramFacts.to_json!(program)
-    manifest = JSON.decode!(json)
+    manifest = Manifest.decode!(json)
 
-    assert_equal(manifest["id"], program.id, "manifest id differs from program id")
+    assert_equal(manifest.id, program.id, "manifest id differs from program id")
 
     assert_equal(
-      length(manifest["files"]),
+      length(manifest.files),
       length(program.files),
       "manifest file count differs from program files"
     )

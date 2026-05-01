@@ -42,7 +42,41 @@ defmodule ProgramFacts.Manifest do
   end
 
   @doc """
-  Converts a manifest or supported ProgramFacts struct to a JSON-friendly map.
+  Decodes a JSON manifest into a manifest struct.
+  """
+  def decode!(json) when is_binary(json) do
+    json
+    |> JSON.decode!()
+    |> from_map!()
+  end
+
+  @doc """
+  Builds a manifest struct from decoded JSON data.
+  """
+  def from_map!(%{
+        "schema_version" => schema_version,
+        "program_facts_version" => program_facts_version,
+        "id" => id,
+        "seed" => seed,
+        "files" => files,
+        "facts" => facts,
+        "metadata" => metadata
+      }) do
+    %__MODULE__{
+      schema_version: schema_version,
+      program_facts_version: program_facts_version,
+      id: id,
+      seed: seed,
+      files: value(files),
+      facts: value(facts),
+      metadata: value(metadata)
+    }
+  end
+
+  def from_map!(%__MODULE__{} = manifest), do: manifest
+
+  @doc """
+  Converts a manifest or supported ProgramFacts struct to JSON-friendly Elixir data.
   """
   def to_map(%__MODULE__{} = manifest) do
     manifest
@@ -53,6 +87,7 @@ defmodule ProgramFacts.Manifest do
   def to_map(%Program{} = program), do: program |> new() |> to_map()
   def to_map(%File{} = file), do: file(file)
   def to_map(%Facts{} = facts), do: facts(facts)
+  def to_map(%{} = map), do: value(map)
 
   defp file(%File{} = file) do
     %{
@@ -77,7 +112,7 @@ defmodule ProgramFacts.Manifest do
   end
 
   defp value(%{} = map) do
-    Map.new(map, fn {key, nested} -> {key, value(nested)} end)
+    Map.new(map, fn {key, nested} -> {manifest_key(key), value(nested)} end)
   end
 
   defp value(list) when is_list(list), do: Enum.map(list, &value/1)
@@ -152,6 +187,66 @@ defmodule ProgramFacts.Manifest do
   end
 
   defp value(other), do: other
+
+  defp manifest_key(key) when is_atom(key), do: key
+
+  defp manifest_key(key) when is_binary(key) do
+    Map.get(manifest_keys(), key, key)
+  end
+
+  defp manifest_keys do
+    %{
+      "analyzer" => :analyzer,
+      "architecture" => :architecture,
+      "arity" => :arity,
+      "assignments" => :assignments,
+      "branch_count" => :branch_count,
+      "branches" => :branches,
+      "call" => :call,
+      "call_edges" => :call_edges,
+      "call_paths" => :call_paths,
+      "clauses" => :clauses,
+      "command" => :command,
+      "data_flows" => :data_flows,
+      "depth" => :depth,
+      "effect" => :effect,
+      "effects" => :effects,
+      "excluded_files" => :excluded_files,
+      "expression" => :expression,
+      "facts" => :facts,
+      "features" => :features,
+      "file" => :file,
+      "files" => :files,
+      "function" => :function,
+      "functions" => :functions,
+      "id" => :id,
+      "index" => :index,
+      "kind" => :kind,
+      "layout" => :layout,
+      "line" => :line,
+      "metadata" => :metadata,
+      "mismatch" => :mismatch,
+      "module" => :module,
+      "modules" => :modules,
+      "name" => :name,
+      "options" => :options,
+      "path" => :path,
+      "policy" => :policy,
+      "program_facts_manifest" => :program_facts_manifest,
+      "program_facts_version" => :program_facts_version,
+      "program_id" => :program_id,
+      "project_layout" => :project_layout,
+      "schema_version" => :schema_version,
+      "seed" => :seed,
+      "shrink" => :shrink,
+      "source" => :source,
+      "steps" => :steps,
+      "target" => :target,
+      "transforms" => :transforms,
+      "type" => :type,
+      "width" => :width
+    }
+  end
 
   defp module?(atom) do
     atom

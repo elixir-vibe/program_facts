@@ -440,7 +440,7 @@ Save generated projects as replayable corpus entries:
 program = ProgramFacts.generate!(policy: :case_clauses, seed: 43)
 
 dir = ProgramFacts.Corpus.save!(program, "corpus/analyzer")
-manifest = ProgramFacts.Corpus.load_manifest!(dir)
+%ProgramFacts.Manifest{} = manifest = ProgramFacts.Corpus.load_manifest!(dir)
 ```
 
 Discover saved manifests:

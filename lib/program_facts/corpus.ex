@@ -4,7 +4,7 @@ defmodule ProgramFacts.Corpus do
   """
 
   alias ProgramFacts.Corpus.Failure
-  alias ProgramFacts.Program
+  alias ProgramFacts.{Manifest, Program}
 
   @doc """
   Writes a generated program to a replayable corpus directory under `root`.
@@ -27,16 +27,20 @@ defmodule ProgramFacts.Corpus do
 
   @doc """
   Loads the `program_facts.json` manifest from a corpus entry directory.
+
+  Returns a `%ProgramFacts.Manifest{}`.
   """
   def load_manifest!(dir) when is_binary(dir) do
     dir
     |> Path.join("program_facts.json")
     |> File.read!()
-    |> JSON.decode!()
+    |> Manifest.decode!()
   end
 
   @doc """
   Loads all manifests below a corpus root.
+
+  Returns `%ProgramFacts.Manifest{}` structs.
   """
   def load_manifests!(root) when is_binary(root) do
     root
@@ -44,7 +48,7 @@ defmodule ProgramFacts.Corpus do
     |> Enum.map(fn manifest ->
       manifest
       |> File.read!()
-      |> JSON.decode!()
+      |> Manifest.decode!()
     end)
   end
 
@@ -80,7 +84,7 @@ defmodule ProgramFacts.Corpus do
   """
   def replay!(manifest_path, analyzer)
       when is_binary(manifest_path) and is_function(analyzer, 1) do
-    manifest = manifest_path |> File.read!() |> JSON.decode!()
+    manifest = manifest_path |> File.read!() |> Manifest.decode!()
     dir = Path.dirname(manifest_path)
     analyzer.(%{dir: dir, manifest: manifest})
   end
