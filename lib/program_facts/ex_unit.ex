@@ -58,8 +58,9 @@ defmodule ProgramFacts.ExUnit do
   end
 
   defp assert_equal(left, right, message) do
-    unless left == right do
-      raise "#{message}: left=#{inspect(left)} right=#{inspect(right)}"
+    if left != right do
+      raise ExUnit.AssertionError,
+        message: "#{message}: left=#{inspect(left)} right=#{inspect(right)}"
     end
   end
 

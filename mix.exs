@@ -14,7 +14,7 @@ defmodule ProgramFacts.MixProject do
       aliases: aliases(),
       dialyzer: [
         plt_file: {:no_warn, "_build/dev/dialyxir_plt.plt"},
-        plt_add_apps: [:mix]
+        plt_add_apps: [:mix, :ex_unit]
       ],
       description: "Generate Elixir programs with known structural facts for analyzer testing.",
       package: package(),
