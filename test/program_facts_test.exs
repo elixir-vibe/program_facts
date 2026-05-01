@@ -3,6 +3,7 @@ defmodule ProgramFactsTest do
   use ExUnitProperties
   doctest ProgramFacts
 
+  alias ProgramFacts.Corpus.Failure
   alias ProgramFacts.Model.Builder
 
   test "lists supported layouts" do
@@ -681,6 +682,26 @@ defmodule ProgramFactsTest do
     assert result.agree?
     assert result.disagreements == []
     assert Enum.all?(result.results, &match?(%ProgramFacts.Analyzer.Result{}, &1))
+  end
+
+  test "promotes failures with failure structs" do
+    root =
+      Path.join(System.tmp_dir!(), "program_facts_failure_#{System.unique_integer([:positive])}")
+
+    program = ProgramFacts.generate!(policy: :single_call, seed: 85)
+
+    failure = Failure.new(program, analyzer: :reach, command: ["mix", "reach"])
+
+    try do
+      dir = ProgramFacts.Corpus.promote_failure!(program, root, failure)
+      manifest = dir |> Path.join("failure.json") |> File.read!() |> JSON.decode!()
+
+      assert manifest["program_id"] == program.id
+      assert manifest["analyzer"] == "reach"
+      assert manifest["command"] == ["mix", "reach"]
+    after
+      File.rm_rf!(root)
+    end
   end
 
   test "promotes shrink results with replay metadata" do

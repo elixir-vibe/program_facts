@@ -3,6 +3,7 @@ defmodule ProgramFacts.Corpus do
   Saves generated programs as replayable corpus entries.
   """
 
+  alias ProgramFacts.Corpus.Failure
   alias ProgramFacts.Program
 
   @doc """
@@ -50,23 +51,28 @@ defmodule ProgramFacts.Corpus do
   @doc """
   Saves a failing program or shrink result and writes failure metadata for replay.
   """
-  def promote_failure!(%Program{} = program, root), do: promote_failure!(program, root, [])
+  def promote_failure!(%Program{} = program, root),
+    do: promote_failure!(program, root, Failure.new(program))
 
-  def promote_failure!(%{program: %Program{} = program} = shrink_result, root)
-      when is_binary(root) do
-    promote_failure!(program, root, shrink_metadata(shrink_result))
+  def promote_failure!(%{program: %Program{}} = shrink_result, root) when is_binary(root) do
+    promote_failure!(shrink_result.program, root, Failure.from_shrink_result(shrink_result))
   end
 
   @doc """
   Saves a failing program and writes failure metadata for later replay.
   """
-  def promote_failure!(%Program{} = program, root, metadata) when is_binary(root) do
+  def promote_failure!(%Program{} = program, root, %Failure{} = failure) when is_binary(root) do
     dir = save!(program, Path.join(root, "failures"))
     failure_path = Path.join(dir, "failure.json")
 
-    File.write!(failure_path, JSON.encode!(failure_manifest(program, metadata)))
+    File.write!(failure_path, JSON.encode!(failure))
 
     dir
+  end
+
+  def promote_failure!(%Program{} = program, root, metadata)
+      when is_binary(root) and is_list(metadata) do
+    promote_failure!(program, root, Failure.new(program, metadata))
   end
 
   @doc """
@@ -77,35 +83,6 @@ defmodule ProgramFacts.Corpus do
     manifest = manifest_path |> File.read!() |> JSON.decode!()
     dir = Path.dirname(manifest_path)
     analyzer.(%{dir: dir, manifest: manifest})
-  end
-
-  defp failure_manifest(program, metadata) do
-    metadata = metadata |> Map.new() |> stringify_keys()
-
-    %{
-      "program_id" => program.id,
-      "metadata" => metadata,
-      "program_facts_manifest" => "program_facts.json",
-      "analyzer" => metadata["analyzer"],
-      "command" => metadata["command"],
-      "mismatch" => metadata["mismatch"],
-      "shrink" => metadata["shrink"]
-    }
-    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-    |> Map.new()
-  end
-
-  defp stringify_keys(map) do
-    Map.new(map, fn {key, value} -> {to_string(key), value} end)
-  end
-
-  defp shrink_metadata(shrink_result) do
-    [
-      shrink: %{
-        options: Map.new(Map.get(shrink_result, :options, [])),
-        steps: Map.get(shrink_result, :steps, [])
-      }
-    ]
   end
 
   defp policy_name(program) do
