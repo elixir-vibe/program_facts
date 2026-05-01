@@ -51,7 +51,7 @@ defmodule ProgramFacts.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
-      {:ex_slop, "~> 0.3", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:libgraph, "~> 0.16", optional: true},
       {:stream_data, "~> 1.1", optional: true}
     ]

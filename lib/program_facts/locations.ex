@@ -258,6 +258,11 @@ defmodule ProgramFacts.Locations do
     end
   end
 
-  defp last_expression({:__block__, _meta, expressions}), do: List.last(expressions)
+  defp last_expression({:__block__, _meta, expressions}) do
+    expressions
+    |> Enum.reverse()
+    |> List.first()
+  end
+
   defp last_expression(expression), do: expression
 end

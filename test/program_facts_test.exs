@@ -215,7 +215,8 @@ defmodule ProgramFactsTest do
 
     assert length(program.facts.call_edges) == 3
     assert [cycle] = program.facts.call_paths
-    assert hd(cycle) == List.last(cycle)
+    assert [first | _] = cycle
+    assert first == cycle |> Enum.reverse() |> hd()
     assert %{cycles: [_]} = program.facts.architecture
   end
 

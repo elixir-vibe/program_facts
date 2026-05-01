@@ -178,13 +178,14 @@ defmodule ProgramFacts.Graph do
   defp cyclic_component?(_graph, [_left, _right | _rest]), do: true
   defp cyclic_component?(_graph, _component), do: false
 
-  defp cycle_path?(graph, cycle) when length(cycle) > 1 do
+  defp cycle_path?(_graph, []), do: false
+  defp cycle_path?(_graph, [_single]), do: false
+
+  defp cycle_path?(graph, [_left, _right | _rest] = cycle) do
     cycle
     |> Enum.chunk_every(2, 1, :discard)
     |> Enum.all?(fn [source, target] -> Graph.edge(graph, source, target) != nil end)
   end
-
-  defp cycle_path?(_graph, _cycle), do: false
 
   defp graph! do
     unless Code.ensure_loaded?(Graph) do
