@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 - 2026-05-01
+
+### Changed
+
+- Updated ExSlop to `~> 0.4` and enabled the expanded Credence-inspired check set in Credo.
+
+### Fixed
+
+- Replaced remaining `List.last/1` and `length/1` guard patterns reported by the expanded ExSlop checks.
+
 ## 0.2.0 - 2026-05-01
 
 ### Added

@@ -368,7 +368,7 @@ defmodule ProgramFactsTest do
     map = ProgramFacts.to_map(program)
 
     assert map.schema_version == 1
-    assert map.program_facts_version == "0.2.0"
+    assert map.program_facts_version == "0.2.1"
     assert map.id == "pf_39_linear_call_chain"
     assert [%{path: _, source: _, kind: :elixir}, _] = map.files
 
