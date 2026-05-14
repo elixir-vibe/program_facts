@@ -424,10 +424,16 @@ defmodule ProgramFactsTest do
       try do
         assert {_, 0} = System.cmd("mix", ["compile"], cd: dir, stderr_to_stdout: true)
 
-        beam_paths =
-          Path.wildcard(
-            Path.join(dir, "_build/dev/lib/*/ebin/Elixir.Generated.ProgramFacts*.beam")
+        {compile_path, 0} =
+          System.cmd("mix", ["eval", "IO.write(Mix.Project.compile_path())"],
+            cd: dir,
+            stderr_to_stdout: true
           )
+
+        beam_paths =
+          compile_path
+          |> Path.join("Elixir.Generated.ProgramFacts*.beam")
+          |> Path.wildcard()
 
         assert length(beam_paths) == length(program.facts.modules)
       after
