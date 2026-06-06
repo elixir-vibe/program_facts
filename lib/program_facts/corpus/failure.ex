@@ -69,6 +69,8 @@ defmodule ProgramFacts.Corpus.Failure do
     |> from_map!()
   end
 
+  def from_map!(%__MODULE__{} = failure), do: failure
+
   def from_map!(%{program_id: program_id} = map) do
     %__MODULE__{
       program_id: program_id,
@@ -80,8 +82,6 @@ defmodule ProgramFacts.Corpus.Failure do
       metadata: Map.get(map, :metadata, %{})
     }
   end
-
-  def from_map!(%__MODULE__{} = failure), do: failure
 
   @doc """
   Builds failure metadata from a shrink result.
