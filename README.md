@@ -591,6 +591,17 @@ model.features
 
 See [`ROADMAP.md`](ROADMAP.md) for long-term plans, including richer model builder APIs, more renderer backends, shrinking/minimization, Erlang generation, and broader Elixir syntax.
 
+## Part of Elixir Vibe
+
+ProgramFacts generates Elixir programs with known ground-truth structure, for testing the analyzers that test everything else.
+
+It is one building block of a larger stack — tools that make AI-generated
+software checkable: structural search, dependence analysis, duplication and
+slop detection, session replay, and ecosystem-wide code search. See the
+[Elixir Vibe](https://github.com/elixir-vibe) organization for the rest, and
+[Building Blocks for the Future Web](https://github.com/elixir-vibe/building-blocks)
+for the thesis, architecture, and roadmap that tie them together.
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
